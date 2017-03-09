@@ -53,6 +53,7 @@ void init_pinstates() {
 }
 
 void init_everything() {
+
   /*
   delay(500);
   Serial.println("waiting...");
