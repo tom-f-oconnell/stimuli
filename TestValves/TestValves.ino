@@ -7,9 +7,9 @@ const int max_olfactometer_pin = min_olfactometer_pin + num_odors - 1;
 
 void setup() {
   Serial.begin(9600);
-  Serial.print('Testing olfactometer valves on Arduino pins ');
+  Serial.print("Testing olfactometer valves on Arduino pins ");
   Serial.print(min_olfactometer_pin);
-  Serial.print(' through ');
+  Serial.print(" through ");
   Serial.println(max_olfactometer_pin);
   
   for (int i=min_olfactometer_pin;i<=max_olfactometer_pin;i++) {
