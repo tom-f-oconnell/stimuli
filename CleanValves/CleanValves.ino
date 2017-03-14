@@ -1,5 +1,6 @@
 
-const int min_pin = 5;
+
+const int min_pin = 4;
 const int max_pin = 11;
 
 void setup() {
