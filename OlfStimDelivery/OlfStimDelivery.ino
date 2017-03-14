@@ -1,8 +1,11 @@
-//#include <avr/wdt.h>
 #include <RBD_Timer.h>
 
-// if you comment out this define, the compiled code will exclude any serial prints
-// to make things slightly more real time
+// set true if another valve (its normally open port connected to the mock vial / directly into manifold)
+// is to be switched each time any other valve / valve combination is used
+const boolean SEPARATE_BALANCE_VALVE = true;
+
+// irrelevant if above is false
+const boolean BALANCE_NORMALLY_OPEN = false;
 
 const int scopePin = 3;
 const int odor_signaling_pin = 12;   // will send a number of pulses = digital pin # pulsed for current trial
@@ -12,14 +15,15 @@ const int balance_pin = 4;
 const int max_num_odors = 7;
 
 const int ITI = 30;            // intertrial interval in seconds (30)
+                               // *** the time from last time scopePin was high in one trial
+                               //     to first time it goes high in the next next ***
 const int odorPulseLen_ms = 500;    // length of the odor pulse in milliseconds
 const int scopeLen = 15;       // length of scope acquisition time in seconds (was using 15)
 const int odorPulseOnset = 3; // onset time of odor pulse in seconds (3) (maybe increase)
 
 // uses all pins in this range as digital outputs
 // one valve per pin
-
-// parafin is handled separately, and its valve is using pin 4
+// the balance is handled separately if flags are set above
 const int min_olfactometer_pin = 5;
 const int max_olfactometer_pin = min_olfactometer_pin + max_num_odors - 1;
 
@@ -36,11 +40,15 @@ RBD::Timer OlfStartTimer;
 RBD::Timer OlfLenTimer;
 
 void init_pinstates() {
-  pinMode(balance_pin, OUTPUT);
+  if (SEPARATE_BALANCE_VALVE) {
+    pinMode(balance_pin, OUTPUT);
+  }
   pinMode(scopePin, OUTPUT);
   pinMode(odor_signaling_pin, OUTPUT);
-  
-  digitalWrite(balance_pin, LOW);
+
+  if (SEPARATE_BALANCE_VALVE) {
+    digitalWrite(balance_pin, LOW);
+  }
   digitalWrite(scopePin, LOW);
   digitalWrite(odor_signaling_pin, LOW);
 
@@ -53,7 +61,6 @@ void init_pinstates() {
 }
 
 void init_everything() {
-
   /*
   delay(500);
   Serial.println("waiting...");
@@ -202,7 +209,16 @@ void loop() {
     }
 
     if (OlfLenTimer.onActive()) {
-      digitalWrite(balance_pin, HIGH);
+      // if we don't want to power the solenoids with a high duty cycle, 
+      // could switch outputs of balance pin and invert logic
+      // (we want the balance pin to provide an equivalent path for flow whenever the odor valves 
+      //  are not open, to keep the total airflow constant)
+      if (BALANCE_NORMALLY_OPEN) {
+        digitalWrite(balance_pin, HIGH);
+      } else {
+        // otherwise treat the logic the same as the other pins
+        digitalWrite(balance_pin, LOW);
+      }
       for (int i=0;i<max_num_odors;i++) {
         if (odor_buffer[i] != -1)
           digitalWrite(odor_buffer[i], HIGH);
@@ -217,7 +233,13 @@ void loop() {
           odor_buffer[i] = -1;
         }
       }
-      digitalWrite(balance_pin, LOW);
+      
+      if (BALANCE_NORMALLY_OPEN) {
+        digitalWrite(balance_pin, LOW);
+      } else {
+        digitalWrite(balance_pin, HIGH);
+      }
+      
       digitalWrite(odor_signaling_pin, LOW);
     }
   } // end isActive check
