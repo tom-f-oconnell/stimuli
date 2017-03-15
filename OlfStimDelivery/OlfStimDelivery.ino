@@ -2,7 +2,7 @@
 
 // set true if another valve (its normally open port connected to the mock vial / directly into manifold)
 // is to be switched each time any other valve / valve combination is used
-const boolean SEPARATE_BALANCE_VALVE = true;
+const boolean SEPARATE_BALANCE_VALVE = false;
 
 // irrelevant if above is false
 const boolean BALANCE_NORMALLY_OPEN = false;
@@ -11,13 +11,13 @@ const int scopePin = 3;
 const int odor_signaling_pin = 12;   // will send a number of pulses = digital pin # pulsed for current trial
 
 //set stimulus variables
-const int balance_pin = 4;
-const int max_num_odors = 7;
+const int balance_pin = -1;
+const int max_num_odors = 8;
 
-const int ITI = 30;            // intertrial interval in seconds (30)
+const int ITI = 105;            // intertrial interval in seconds (30)
                                // *** the time from last time scopePin was high in one trial
                                //     to first time it goes high in the next next ***
-const int odorPulseLen_ms = 500;    // length of the odor pulse in milliseconds
+const int odorPulseLen_ms = 2000;    // length of the odor pulse in milliseconds
 const int scopeLen = 15;       // length of scope acquisition time in seconds (was using 15)
 const int odorPulseOnset = 3; // onset time of odor pulse in seconds (3) (maybe increase)
 
@@ -46,8 +46,13 @@ void init_pinstates() {
   pinMode(scopePin, OUTPUT);
   pinMode(odor_signaling_pin, OUTPUT);
 
+  // TODO check
   if (SEPARATE_BALANCE_VALVE) {
-    digitalWrite(balance_pin, LOW);
+    if (BALANCE_NORMALLY_OPEN) {
+      digitalWrite(balance_pin, LOW);
+    } else {
+      digitalWrite(balance_pin, HIGH);
+    }
   }
   digitalWrite(scopePin, LOW);
   digitalWrite(odor_signaling_pin, LOW);
@@ -213,11 +218,13 @@ void loop() {
       // could switch outputs of balance pin and invert logic
       // (we want the balance pin to provide an equivalent path for flow whenever the odor valves 
       //  are not open, to keep the total airflow constant)
-      if (BALANCE_NORMALLY_OPEN) {
-        digitalWrite(balance_pin, HIGH);
-      } else {
-        // otherwise treat the logic the same as the other pins
-        digitalWrite(balance_pin, LOW);
+      if (SEPARATE_BALANCE_VALVE) {
+        if (BALANCE_NORMALLY_OPEN) {
+          digitalWrite(balance_pin, HIGH);
+        } else {
+          // otherwise treat the logic the same as the other pins
+          digitalWrite(balance_pin, LOW);
+        }
       }
       for (int i=0;i<max_num_odors;i++) {
         if (odor_buffer[i] != -1)
@@ -233,11 +240,13 @@ void loop() {
           odor_buffer[i] = -1;
         }
       }
-      
-      if (BALANCE_NORMALLY_OPEN) {
-        digitalWrite(balance_pin, LOW);
-      } else {
-        digitalWrite(balance_pin, HIGH);
+
+      if (SEPARATE_BALANCE_VALVE) {
+        if (BALANCE_NORMALLY_OPEN) {
+          digitalWrite(balance_pin, LOW);
+        } else {
+          digitalWrite(balance_pin, HIGH);
+        }
       }
       
       digitalWrite(odor_signaling_pin, LOW);
