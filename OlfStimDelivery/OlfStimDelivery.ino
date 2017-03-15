@@ -14,17 +14,17 @@ const int odor_signaling_pin = 12;   // will send a number of pulses = digital p
 const int balance_pin = -1;
 const int max_num_odors = 8;
 
-const int ITI = 105;            // intertrial interval in seconds (30)
+const int ITI = 90;            // intertrial interval in seconds
                                // *** the time from last time scopePin was high in one trial
                                //     to first time it goes high in the next next ***
-const int odorPulseLen_ms = 2000;    // length of the odor pulse in milliseconds
-const int scopeLen = 15;       // length of scope acquisition time in seconds (was using 15)
-const int odorPulseOnset = 3; // onset time of odor pulse in seconds (3) (maybe increase)
+const int odorPulseLen_ms = 1000;    // length of the odor pulse in milliseconds
+const int scopeLen = 30;       // length of scope acquisition time in seconds
+const int odorPulseOnset = 10; // onset time of odor pulse in seconds
 
 // uses all pins in this range as digital outputs
 // one valve per pin
 // the balance is handled separately if flags are set above
-const int min_olfactometer_pin = 5;
+const int min_olfactometer_pin = 4;
 const int max_olfactometer_pin = min_olfactometer_pin + max_num_odors - 1;
 
 // will hold an integer corresponding to pin number to be pulsed in each index
@@ -259,7 +259,7 @@ void loop() {
     
     // TODO be careful mixing delays and timers
     // CHECK!!!
-    delay(ITI * 1000);
+    delay(((long) ITI) * 1000);
     trialTimer.restart();
   } // end onExpired check
 } // end loop
