@@ -65,6 +65,11 @@ void init_everything() {
       if (msg.equals("start")) {
         //Serial.println("starting...");
         break;
+      } else if (msg.equals("test")) {
+        pin = Serial.parseInt();
+        digitalWrite(pin, HIGH);
+        delay(1000);
+        digitalWrite(pin, LOW);
       }
     }
   }
