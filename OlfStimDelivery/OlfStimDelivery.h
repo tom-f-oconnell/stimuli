@@ -59,6 +59,7 @@ void init_everything() {
   trial_index = 0;
 
   String msg;
+  int pin;
   while (true) {
     if (Serial.available() > 0) {
       msg = Serial.readString();

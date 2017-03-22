@@ -1,6 +1,6 @@
 
-#ifndef STIM_PARAMETERS
-#define STIM_PARAMETERS
+#ifndef STIM_PARAMS
+#define STIM_PARAMS
 
 // set true if another valve (its normally open port connected to the mock vial / directly into manifold)
 // is to be switched each time any other valve / valve combination is used
