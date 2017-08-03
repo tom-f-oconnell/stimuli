@@ -1,0 +1,1 @@
+is note on rosserial_arduino wiki page about needing to run catkin_make install still applicable?

@@ -1,4 +1,10 @@
+
+#include <ros.h>
+// TODO probably change to whatever custom message type
+#include <std_msgs/UInt16.h>
 #include <RBD_Timer.h>
+
+ros::NodeHandle nh;
 
 // set true if another valve (its normally open port connected to the mock vial / directly into manifold)
 // is to be switched each time any other valve / valve combination is used
