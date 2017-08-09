@@ -1,0 +1,40 @@
+want to move trial structure / timing information from Arduino
+to Python, as it will likely be easier to define trial structures 
+in Python or some other high level language...
+	-at a minimum, the longer scale timing information
+	 (perhaps leave relative timing of pins within trial to
+	  Arduino)
+	
+possible message format from host computer to arduino:
+-time_sent (header)
+-start_time
+-trial_index?
+-max_time (to save arduino the computation?)?
+-[(pin0, [(time0, new_state0), (time1, new_state1), ...]), ...]
+	-will i be able to send this despite dynamic size?
+-maybe ideally states would be either high, low, or some square 
+ wave depiction (freq + duty cycle?)?
+-maybe set freq to 0 Hz for HIGH / LOW?
+-two lists?
+-another list for # of pulses if more convenient in some circumstances?
+
+====================
+response (should be asap):
+-timestamp from initiating mesage
+-timestamp just after receiving message (header)
+-indications of failure? (decode response or other way to signal
+ failure?)
+-anything else?
+
+job of arduino:
+-wait until start time (and start at a time faithful to master)
+-have all necessary information by start time
+	-or report error
+-toggle correct pins in order (to <=1ms precision?)
+-reset back to waiting condition after finishing pulse train
+-TODO how to handle integer signalling (to maintain compatiblility w/ old setup, etc)
+	-specify time buffer between signal and start of pulse?
+
+-publish a topic / otherwise indicate failure that does not happen while processing request
+
+-performance characteristics of service requests through rosserial?
