@@ -16,8 +16,26 @@
 #include <stimuli/PulseSequence.h>
 
 ros::NodeHandle nh;
+// what does this do?
+using stimuli::PulseSeq;
 
 boolean pulse_registered;
+
+// TODO is it any easier having one node initiate this interaction?
+// make any more sense one way? (right now the python node will be
+// pushing updates)
+void callback(const PulseSeq::Request &req, PulseSeq::Response &res) {
+  // TODO
+  // syntax?
+  res.header.time_received = nh.now();
+  if (pulse_registered) {
+    // TODO fail
+    return;
+  }
+  
+  pulse_registered = true;
+}
+ros::ServiceServer<PulseSeq::Request, PulseSeq::Response> server("load_next_stiminfo", &callback);
 
 // signal to the data acquisition which olfactometer pin we will pulse for this trial
 // ~2 ms period square wave. # pulses = pin #
@@ -34,21 +52,10 @@ void signal_odor(unsigned char pin) {
   delay(10);
 }
 
-void pulse_seq_callback(const PulseSeq::Request &req, PulseSeq::Response &res) {
-  // TODO
-  // syntax?
-  res.header.time_received = nh.now();
-  if (pulse_registered) {
-    // TODO fail
-    return;
-  }
-  
-  pulse_registered = true;
-}
-
 void setup() {
+  // TODO name?
   nh.initNode();
-  nh.advertiseService(pulse_roll);
+  nh.advertiseService(server);
   // need topic for error reporting? dead man switch in case
   // lockup?
   pulse_registered = false;
