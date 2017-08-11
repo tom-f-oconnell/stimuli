@@ -7,9 +7,9 @@ project(stimuli)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
+# TODO add genpy*?
 find_package(catkin REQUIRED COMPONENTS
   rospy
-  roscpp
   std_msgs
   message_generation
   rosserial_arduino
@@ -74,9 +74,10 @@ add_service_files(
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
   DEPENDENCIES
-  std_msgs  # Or other packages containing msgs
+  std_msgs
+  stimuli
 )
-# TODO my own?
+# TODO should stimuli be here? i don't think tutorial did this?
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -107,8 +108,9 @@ generate_messages(
 ## LIBRARIES: libraries you create in this project that dependent projects also need
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
-# TODO TODO update!
+# TODO update?
 catkin_package(
+# TODO add ros_lib for arduino?
 #  INCLUDE_DIRS include
 #  LIBRARIES stimuli
 #  CATKIN_DEPENDS rosserial_arduino
@@ -204,3 +206,36 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+#############
+## Upload  ##
+#############
+
+# this set doesn't seem to work globally from here? how to?
+#set(ARDUINO_SDK_PATH "~/arduino-1.8.3")
+#message(STATUS "SET ARDUINO SDK PATH")
+#
+## TODO need to set path for libraries for avr build to work?
+## (normally i would supply make_libraries.py a path if calling
+##  manually... actually, there isn't a make_libraries.py, right?)
+#rosserial_generate_ros_lib(
+#  PACKAGE rosserial_arduino
+#  SCRIPT make_libraries.py
+#)
+#message(STATUS "AFTER ROSSERIAL_GENERATE_ROS_LIB")
+#
+## TODO why might cmake not be entering that directory?
+#rosserial_configure_client(
+#  DIRECTORY firmware
+## TODO what is this doing if not replacing sdk?
+#  TOOLCHAIN_FILE ${ROSSERIAL_ARDUINO_TOOLCHAIN}
+#)
+#message(STATUS "AFTER ROSSERIAL_CONFIGURE_CLIENT")
+#
+## TODO document if prefix of upload target needs to be the 
+## target above?
+#rosserial_add_client_target(firmware stimulus ALL)
+#message(STATUS "AFTER ADDING STIMULUS_ARDUINO TARGET")
+#rosserial_add_client_target(firmware stimulus-upload)
+#message(STATUS "AFTER ADDING UPLOAD TARGET")
+
