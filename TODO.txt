@@ -1,1 +1,4 @@
 is note on rosserial_arduino wiki page about needing to run catkin_make install still applicable?
+
+make some kind of copy constructor generation for rosserial? should it not be necessary for some
+reason? with an arg?

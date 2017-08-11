@@ -2,4 +2,4 @@
 
 import rospy
 
-
+rospy.spin()

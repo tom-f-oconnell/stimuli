@@ -53,6 +53,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   State.msg
+  DefaultState.msg
   Transition.msg
   Pulse.msg
   PulseSeq.msg
@@ -61,6 +62,7 @@ add_message_files(
 ## Generate services in the 'srv' folder
 add_service_files(
   FILES
+  LoadDefaultStates.srv
   LoadPulseSeq.srv
 )
 

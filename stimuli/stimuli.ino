@@ -14,7 +14,9 @@
 #include <ros.h>
 // what happens if this isn't included?
 #include <ros/time.h>
+#include <stimuli/DefaultState.h>
 #include <stimuli/PulseSeq.h>
+#include <stimuli/LoadDefaultStates.h>
 #include <stimuli/LoadPulseSeq.h>
 
 #define MAX_PARAM_NAME_LENGTH 256
@@ -22,13 +24,31 @@
 #define MAX_NUM_PINS 8
 
 ros::NodeHandle nh;
-// what does this do?
-// TODO should i use something more general / do this for my other stuff?
+
+using stimuli::DefaultState;
 using stimuli::PulseSeq;
 
+boolean defaults_registered;
 boolean pulse_registered;
-
 int odor_signaling_pin;
+DefaultState pin_defaults[MAX_NUM_PINS];
+unsigned char pins_to_signal[MAX_NUM_PINS];
+
+
+// not using params because it (seems) harder to get a parameter list of dynamic size...
+// not sure why they didn't implement them simiarly, especially considering all param types seem to be contained in
+// std_msgs...
+void load_defaults(const stimuli::LoadDefaultStatesRequest &req, stimuli::LoadDefaultStatesResponse &res) {
+  res.receive_time = nh.now();
+  res.request_time = req.header.stamp;
+  if (defaults_registered) {
+    nh.logerror("received default pins states while already having defaults");
+    return;
+  }
+  
+}
+// TODO i'm not limited in the number of ServiceServers I can operate at once on the arduino am i?
+ros::ServiceServer<stimuli::LoadDefaultStatesRequest, stimuli::LoadDefaultStatesResponse> defaults_server("load_defaults", &load_defaults);
 
 // TODO arduino fail w/ error is max_num_pins is > what arduino has?
 
@@ -36,18 +56,24 @@ int odor_signaling_pin;
 // make any more sense one way? (right now the python node will be
 // pushing updates)
 // TODO update docs to remove :: and just concatenate? or am i missing something?
-void callback(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPulseSeqResponse &res) {
-  // TODO
-  // syntax?
+// TODO what does it mean to have the ampersand here? not sure i've seen that...a
+void load_next_sequences(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPulseSeqResponse &res) {
   res.receive_time = nh.now();
+  res.request_time = req.seq.header.stamp;
   if (pulse_registered) {
-    // TODO fail
+    nh.logerror("was sent another set of stimulus info before first expired");
+    // maybe make this fatal?
     return;
+  }
+
+  // TODO dynamically allocate? or use some kind of copy constructor and just keep request obj around?
+  for (int i=0;i<req.seq.pins_to_signal_length;i++) {
+    pins_to_signal[i] = req.seq.pins_to_signal[i];
   }
   
   pulse_registered = true;
 }
-ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_next_stiminfo", &callback);
+ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_next_sequences", &load_next_sequences);
 
 void fail() {
   noInterrupts();
@@ -134,7 +160,6 @@ bool get_param(const char *n, char **param, bool required=false, int len=1, int 
 // what does Serial.print do?
 // TODO check for republishing node or fail (will be missing important parameters)
 void get_params() {
-  bool s;
   int their_max;
 
   nh.loginfo("stimulus arduino loading parameters");
@@ -167,6 +192,10 @@ void signal_odor(unsigned char pin) {
   delay(10);
 }
 
+void update_pulses() {
+  
+}
+
 void setup() {
   // disabling interrupts necessary here?
   noInterrupts();
@@ -184,6 +213,10 @@ void setup() {
 }
 
 void loop() {
+  // bounds on how long this will take?
+  // TODO debug compile flags to track distribution of times this takes, w/ emphasis on extreme values?
+  // for reporting...
+  // i think for now i'm just going to block while executing the sequence
   nh.spinOnce();
   // TODO why do they always delay?
   // how to prevent this from limiting my timing precision?
