@@ -1,12 +1,13 @@
 <launch>
-  <node name="tester" pkg="stimuli" type="test_arduino.py" />
+  <node name="tester" pkg="stimuli" type="test_arduino.py" output="screen" />
   
   <node name="arduino_interface" pkg="rosserial_python" type="serial_node.py" output="screen">
     <!-- TODO figure out how to autodetect and use hw id -->
     <param name="port" value="/dev/ttyACM0" />
     
-    <!-- reduce baud a little if there are problems -->
+    <!-- reduce baud a little if there are problems
     <param name="baud" value="115200" />
+    -->
 
     <!-- can i check for advertised services here? -->
     <rosparam>

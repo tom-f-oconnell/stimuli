@@ -10,6 +10,8 @@
   #include <WProgram.h>
 #endif
 
+// TODO debug flags with rosdebug prints
+
 #include <avr/wdt.h>
 #include <ros.h>
 // what happens if this isn't included?
@@ -59,6 +61,7 @@ void load_defaults(const stimuli::LoadDefaultStatesRequest &req, stimuli::LoadDe
   res.receive_time = nh.now();
   res.request_time = req.header.stamp;
   if (defaults_registered) {
+    // TODO replace with warn so i can control state after that? does error actually exit / do something?
     nh.logerror("received default pins states while already having defaults");
     return;
   }
@@ -88,6 +91,7 @@ void load_next_sequences(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadP
   res.receive_time = nh.now();
   res.request_time = req.seq.header.stamp;
   if (pulse_registered) {
+    // TODO careful...
     nh.logerror("was sent another set of stimulus info before first expired");
     // maybe make this fatal?
     return;
@@ -141,7 +145,7 @@ void load_next_sequences(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadP
   // TODO dynamically allocate? or use some kind of copy constructor and just keep request obj around?
   pulse_registered = true;
 }
-ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_next_sequences", &load_next_sequences);
+ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_next_sequence", &load_next_sequences);
 
 void reset() {
   noInterrupts();
@@ -151,7 +155,7 @@ void reset() {
 }
 
 void fail(const char *s) {
-  // not sure this even works?
+  // TODO careful... might never get to the next line
   nh.logerror(s);
   reset();
 }
@@ -224,24 +228,37 @@ bool get_param(const char *n, char **param, bool required=false, int len=1, int 
   return get_param(n, param, NULL, required=required, len=len, timeout=timeout);
 }
 
+// TODO TODO keep trying to get params if any requests are not successful?
+
 // TODO modify these library functions so they can take string or any kind of const char input?
 // what does Serial.print do?
 // TODO check for republishing node or fail (will be missing important parameters)
-void get_params() {
+bool get_params() {
+  bool success;
   int their_max;
 
-  nh.loginfo("stimulus arduino loading parameters");
+  nh.loginfo("stimulus arduino attempting to get parameters");
   
-  get_param("olf/max_num_pins", &their_max);
-  if (their_max >= MAX_NUM_PINS) {
+  success = get_param("olf/max_num_pins", &their_max);
+  //nh.logwarn(success 
+  if (!success) {
+    nh.logwarn("parameter olf/max_num_pins needs to be set");
+    return false;
+  }
+  if (their_max > MAX_NUM_PINS) {
     fail("Arduino can't dynamically allocate pins. Change MAX_NUM_PINS in Arduino code to a higher value");
   }
 
   // TODO way to load them into variable of same name somehow (or compile time macro for it?)?
   // (so i can operate on a list of param names)
-  get_param("olf/odor_signaling_pin", &odor_signaling_pin);
-  pinMode(odor_signaling_pin, OUTPUT);
+  int default_odor_signaling_pin = PIN_NOT_SET;
+  get_param("olf/odor_signaling_pin", &odor_signaling_pin, &default_odor_signaling_pin);
+  if (odor_signaling_pin != PIN_NOT_SET) {
+    nh.logwarn("no odor signaling pin set. set the parameter olf/odor_signaling_pin if you'd like to signal to a DAQ");
+    pinMode(odor_signaling_pin, OUTPUT);
+  }
   nh.loginfo("stimulus arduino done loading parameters");
+  return success;
 }
 
 void init_state() {
@@ -396,7 +413,10 @@ void setup() {
   // TODO name?
   nh.initNode();
   nh.advertiseService(server);
-  get_params();
+  // keep trying to get params until succesful
+  while (!get_params()) {
+    delay(500);
+  }
 }
 
 // TODO change things named pulse_XXX to sequence_XXX
