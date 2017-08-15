@@ -59,6 +59,7 @@ int odor_signaling_pin;
 // std_msgs...
 void load_defaults(const stimuli::LoadDefaultStatesRequest &req, stimuli::LoadDefaultStatesResponse &res) {
   res.receive_time = nh.now();
+  nh.loginfo("stimulus arduino receiving defaults...");
   res.request_time = req.header.stamp;
   if (defaults_registered) {
     // TODO replace with warn so i can control state after that? does error actually exit / do something?
@@ -87,8 +88,9 @@ ros::ServiceServer<stimuli::LoadDefaultStatesRequest, stimuli::LoadDefaultStates
 // pushing updates)
 // TODO update docs to remove :: and just concatenate? or am i missing something?
 // TODO what does it mean to have the ampersand here? not sure i've seen that...a
-void load_next_sequences(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPulseSeqResponse &res) {
+void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPulseSeqResponse &res) {
   res.receive_time = nh.now();
+  nh.loginfo("stimulus arduino in load_next_sequence");
   res.request_time = req.seq.header.stamp;
   if (pulse_registered) {
     // TODO careful...
@@ -145,7 +147,7 @@ void load_next_sequences(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadP
   // TODO dynamically allocate? or use some kind of copy constructor and just keep request obj around?
   pulse_registered = true;
 }
-ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_next_sequence", &load_next_sequences);
+ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_next_sequence", &load_next_sequence);
 
 void reset() {
   noInterrupts();
@@ -251,12 +253,14 @@ bool get_params() {
 
   // TODO way to load them into variable of same name somehow (or compile time macro for it?)?
   // (so i can operate on a list of param names)
+  /*
   int default_odor_signaling_pin = PIN_NOT_SET;
   get_param("olf/odor_signaling_pin", &odor_signaling_pin, &default_odor_signaling_pin);
   if (odor_signaling_pin != PIN_NOT_SET) {
     nh.logwarn("no odor signaling pin set. set the parameter olf/odor_signaling_pin if you'd like to signal to a DAQ");
     pinMode(odor_signaling_pin, OUTPUT);
   }
+  */
   nh.loginfo("stimulus arduino done loading parameters");
   return success;
 }
@@ -395,11 +399,15 @@ void end_sequence() {
 }
 
 void update_pulses_blocking() {
+  nh.loginfo("stimulus arduino beginning sequence");
+  digitalWrite(LED_BUILTIN, HIGH);
   while (millis() < end_ms) {
   // while (micros() < end_us) {
     update_pulses_ros();
   }
   end_sequence();
+  digitalWrite(LED_BUILTIN, LOW);
+  nh.loginfo("stimulus arduino finished sequence");
 }
 
 void setup() {
@@ -407,26 +415,41 @@ void setup() {
   noInterrupts();
   wdt_disable();
   interrupts();
+
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+  
   init_state();
   // ever a chance of these first two calls taking > WDT_RESET?
   // i could limit their timeouts to prevent that?
   // TODO name?
   nh.initNode();
+  nh.advertiseService(defaults_server);
   nh.advertiseService(server);
   // keep trying to get params until succesful
   while (!get_params()) {
     delay(500);
   }
+  nh.loginfo("stimulus arduino done setup.");
 }
 
 // TODO change things named pulse_XXX to sequence_XXX
+//int mod = 0;
+
 
 void loop() {
+  // do w/ certain low rate?
+  //if (mod % 1) {
+  //nh.loginfo("stimulus arduino in loop");
+  //  mod = (mod + 1) % 1;
+  //}
+  
   // bounds on how long this will take?
   // TODO debug compile flags to track distribution of times this takes, w/ emphasis on extreme values?
   // for reporting...
   // i think for now i'm just going to block while executing the sequence
   nh.spinOnce();
+  
   if (pulse_registered) {
     if (start_ms <= millis()) {
       update_pulses_blocking();
@@ -436,5 +459,5 @@ void loop() {
   }
   // TODO why do they always delay?
   // how to prevent this from limiting my timing precision?
-  delay(10);
+  delay(100);
 }
