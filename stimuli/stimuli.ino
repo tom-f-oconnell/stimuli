@@ -3,6 +3,7 @@
 // stuff if in a catkin package? how to automatically upload?
 // or at least facilitate switching between ROS / potential non-
 // ROS interface
+// TODO add (maybe target specific) preprocessor definition in catkin / cmake to support this
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -23,6 +24,8 @@
 
 #define MAX_PARAM_NAME_LENGTH 256
 // TODO compare to builtin related to board to validate?
+// TODO maybe just make arbitrarily large and err if used > # actually available on board?
+// or invalid pin #s requested?
 #define MAX_NUM_PINS 8
 #define PIN_NOT_SET -1
 
@@ -34,17 +37,17 @@ boolean pulse_registered;
 // TODO is this ever correctly set?? test!
 stimuli::PulseSeq seq;
 
-unsigned long start_ms;
-unsigned long end_ms;
-unsigned long rostime_millis_offset;
-unsigned long soonest_ms;
+unsigned long long start_ms;
+unsigned long long end_ms;
+unsigned long long rostime_millis_offset;
+unsigned long long soonest_ms;
 
 char pins[MAX_NUM_PINS];
 char pins_for_default[MAX_NUM_PINS];
 unsigned char default_state[MAX_NUM_PINS];
 unsigned int next_state_index[MAX_NUM_PINS];
 unsigned char next_state[MAX_NUM_PINS];
-unsigned long next_time_ms[MAX_NUM_PINS];
+unsigned long long next_time_ms[MAX_NUM_PINS];
 unsigned long ms_on[MAX_NUM_PINS];
 unsigned long ms_off[MAX_NUM_PINS];
 // replace w/ a boolean flag and signal all pins?
@@ -111,8 +114,8 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
 
   // fail if difference of left two terms is negative?
 
-  unsigned long ros_now_ms = to_millis(nh.now());
-  unsigned long now_ms = millis();
+  unsigned long long ros_now_ms = to_millis(nh.now());
+  unsigned long long now_ms = millis();
   rostime_millis_offset = ros_now_ms - now_ms;
   // TODO TODO can i definitely assume start_ms is correct? test!
   start_ms = to_millis(req.seq.start) - rostime_millis_offset;
@@ -140,7 +143,7 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
 
   soonest_ms = to_millis(req.seq.pulse_seq[0].states[0].t);
   stimuli::Transition curr;
-  unsigned long curr_ms;
+  unsigned long long curr_ms;
 
   // TODO error if pulse_seq_length > max_num_pins
   // assume that defaults and these arrive in same order? (and sort on PC side code?)
@@ -328,36 +331,15 @@ void signal_pins() {
   }
 }
 
-// TODO test
-unsigned long to_millis(ros::Time t) {
-  // TODO is ull right? ul? casting necessary?
-  // why do they cast to uint32_t in rosserial_client time code if sec and nsec are defined as
-  // that type? because ull isn't guaranteed to be that?
 
-  // unsigned longs here are 4 bytes
-  unsigned long high_bits_zeroed_secs = 0x00ff & t.sec;
-  /*
-  char str[30];
-  // TODO TODO why is this intelligible on its own? i thought it had two fields...
-  sprintf(str, "t.sec %lu", t.sec);
-  nh.logwarn(str);
-  sprintf(str, "t.nsec %lu", t.nsec);
-  nh.logwarn(str);
-  sprintf(str, "converted t.sec %lu", (unsigned long) t.sec * 1000);
-  nh.logwarn(str);
-  // TODO why isn't this ~3 digits? (it is many more)
-  sprintf(str, "converted t.nsec %lu", (unsigned long) t.nsec / 1000000);
-  nh.logwarn(str);
-  sprintf(str, "total %lu", (unsigned long) t.sec * 1000 + (unsigned long) t.nsec / 1000000);
-  nh.logwarn(str);
-  */
-  // TODO is the type of their sum not ul or something? why does returned value seem diferent from the "total" print?
-  return (unsigned long) high_bits_zeroed_secs * 1000 + (unsigned long) t.nsec / 1000000;
+// TODO unit test
+unsigned long long to_millis(ros::Time t) {
+  return (unsigned long long) (t.sec * 1000ull + t.nsec / 1000000ull);
 }
 
-unsigned long to_micros(ros::Time t) {
-  // TODO fix
-  return (unsigned long) t.sec * 1000000ull + (unsigned long) t.nsec / 1e3;
+unsigned long long to_micros(ros::Time t) {
+  // TODO fix + test
+  return (unsigned long long) (t.sec * 1000000ull + t.nsec / 1000ull);
 }
 
 void update_pwm_pinstates() {
@@ -410,7 +392,7 @@ void update_pulses_ros() {
       }
     }
 
-    unsigned long curr_ms;
+    unsigned long long curr_ms;
     soonest_ms = to_millis(seq.pulse_seq[0].states[next_state_index[0]].t);
     for (int i = 0; i < seq.pulse_seq_length; i++) {
       // TODO check for / fix different wraparound than millis()
@@ -445,7 +427,7 @@ void update_pulses_blocking() {
   nh.loginfo("stimulus arduino beginning sequence");
   char str[30];
   digitalWrite(LED_BUILTIN, HIGH);
-  unsigned long now_millis = millis();
+  unsigned long long now_millis = millis();
   sprintf(str, "millis() %lu", now_millis);
   nh.logwarn(str);
   while (millis() < end_ms) {
@@ -470,11 +452,14 @@ void setup() {
   init_state();
   // ever a chance of these first two calls taking > WDT_RESET?
   // i could limit their timeouts to prevent that?
-  // TODO name?
+  nh.getHardware()->setBaud(9600);
+  char str[42];
+  sprintf(str, "arduino using baudrate of %d", nh.getHardware()->getBaud());
   nh.initNode();
   // to get time sync. may need to spin more times.
   // remove?
   nh.spinOnce();
+  nh.loginfo(str); //
   
   nh.advertiseService(defaults_server);
   nh.advertiseService(server);
@@ -482,28 +467,17 @@ void setup() {
   while (!get_params()) {
     delay(500);
   }
+  nh.loginfo("stimulus arduino done getting parameters.");
+  while (!defaults_registered) {
+    nh.spinOnce();
+  }
+  nh.loginfo("stimulus arduino got defaults.");
   nh.loginfo("stimulus arduino done setup.");
 }
 
 // TODO change things named pulse_XXX to sequence_XXX
-//int mod = 0;
 
 void loop() {
-  /*
-  char str[30];
-  // TODO TODO why is this intelligible on its own? i thought it had two fields...
-  sprintf(str, "nh.now() %lu", nh.now());
-  nh.logwarn(str);
-  sprintf(str, "to_millis(nh.now()) %lu", to_millis(nh.now()));
-  nh.logwarn(str);
-  */
-  
-  // do w/ certain low rate?
-  //if (mod % 1) {
-  //nh.loginfo("stimulus arduino in loop");
-  //  mod = (mod + 1) % 1;
-  //}
-
   // bounds on how long this will take?
   // TODO debug compile flags to track distribution of times this takes, w/ emphasis on extreme values?
   // for reporting...
@@ -518,9 +492,6 @@ void loop() {
     }
   }
 
-  //if (nh.now() != 0 && !services_advertised) {
-    
-  //}
   // TODO why do they always delay?
   // how to prevent this from limiting my timing precision?
   delay(10);
