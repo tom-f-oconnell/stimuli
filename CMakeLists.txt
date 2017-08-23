@@ -213,6 +213,11 @@ include_directories(
 ## Upload  ##
 #############
 
+# TODO make this automatic, conditional on an Arduino being connected that already has the sofware
+# installed?
+# or prompt if an arduino is connected w/o the software installed (or print message at end
+# saying to run the target required for uploading when ready?)
+
 # this set doesn't seem to work globally from here? how to?
 #set(ARDUINO_SDK_PATH "~/arduino-1.8.3")
 #message(STATUS "SET ARDUINO SDK PATH")
