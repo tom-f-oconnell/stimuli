@@ -2,7 +2,7 @@
 #define LED 13
 
 const int num_odors = 8;
-const int min_olfactometer_pin = 4;
+const int min_olfactometer_pin = 54;
 const int max_olfactometer_pin = min_olfactometer_pin + num_odors - 1;
 
 void setup() {
@@ -23,12 +23,14 @@ void setup() {
 
 void loop() {
   for (int i=min_olfactometer_pin;i<=max_olfactometer_pin;i++) {
-    Serial.println(i);
-    digitalWrite(i, HIGH);
-    digitalWrite(LED, HIGH);
-    delay(1000);
-    digitalWrite(i, LOW);
-    digitalWrite(LED, LOW);
-    delay(1000);
+    //for (int j=0;j<3;j++) {
+      Serial.println(i);
+      digitalWrite(i, HIGH);
+      digitalWrite(LED, HIGH);
+      delay(500);
+      digitalWrite(i, LOW);
+      digitalWrite(LED, LOW);
+      delay(2500);
+    //}
   }
 }

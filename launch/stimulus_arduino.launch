@@ -1,8 +1,9 @@
 <launch>
+  <arg name="port" default="/dev/ttyACM0" />
+
   <node name="arduino_interface" pkg="rosserial_python" type="serial_node.py" output="screen">
     <!-- TODO figure out how to autodetect and use hw id / software to identify by function -->
-    <param name="port" value="/dev/ttyACM0" />
-    
+    <param name="port" value="$(arg port)" type="str" />
     <param name="baud" value="9600" />
 
     <!-- TODO test it fails / how if not advertised -->
