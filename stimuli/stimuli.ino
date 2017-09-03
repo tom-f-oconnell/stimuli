@@ -285,6 +285,10 @@ bool get_params() {
 
   // TODO will this err if not set? any way to suppress that?
   success = get_param("stimulus_arduino/debug", &local_debug);
+  
+  // could result in debug being false when it was just not correctly sent
+  // but is set true. maybe try to fix that? (as is to not fail if param is
+  // not set. use required flag?)
   if (!success) {
     debug = false;
   } else {
@@ -297,8 +301,6 @@ bool get_params() {
 
   success = get_param("olf/max_num_pins", &their_max);
   if (!success) {
-    // TODO make fatal?
-    nh.logwarn("parameter olf/max_num_pins needs to be set");
     return false;
   }
   if (their_max > MAX_NUM_PINS) {
