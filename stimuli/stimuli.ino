@@ -11,8 +11,6 @@
 #include <WProgram.h>
 #endif
 
-// TODO debug flags with rosdebug prints
-
 #include <avr/wdt.h>
 #include <ros.h>
 // what happens if this isn't included?
@@ -30,6 +28,8 @@
 #define PIN_NOT_SET -1
 
 ros::NodeHandle nh;
+
+boolean debug;
 
 boolean defaults_registered;
 boolean pulse_registered;
@@ -69,6 +69,12 @@ void load_defaults(const stimuli::LoadDefaultStatesRequest &req, stimuli::LoadDe
     nh.logerror("received default pins states while already having defaults");
     return;
   }
+  char str[30];
+  // TODO how to set debug flag dynamically from computer? include in service type
+  // since cant seem to reliably nh.getParams before services are negotiated...
+  if (debug) {
+    nh.loginfo("defaults:");
+  }
   for (int i = 0; i < req.defaults_length; i++) {
     pins_for_default[i] = req.defaults[i].pin;
     pinMode(pins_for_default[i], OUTPUT);
@@ -78,6 +84,10 @@ void load_defaults(const stimuli::LoadDefaultStatesRequest &req, stimuli::LoadDe
       default_state[i] = LOW;
     }
     digitalWrite(pins_for_default[i], default_state[i]);
+    if (debug) {
+      sprintf(str, "%d=%d", pins_for_default[i], default_state[i]); 
+      nh.loginfo(str);
+    }
   }
   defaults_registered = true;
 }
@@ -93,7 +103,9 @@ ros::ServiceServer<stimuli::LoadDefaultStatesRequest, stimuli::LoadDefaultStates
 // TODO what does it mean to have the ampersand here? not sure i've seen that...a
 void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPulseSeqResponse &res) {
   res.receive_time = nh.now();
-  nh.loginfo("stimulus arduino in load_next_sequence");
+  if (debug) {
+    nh.loginfo("stimulus arduino entering load_next_sequence");
+  }
   res.request_time = req.seq.header.stamp;
   if (pulse_registered) {
     // TODO careful...
@@ -122,24 +134,26 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
   // TODO this actually a keyword problem ("end")?
   end_ms = to_millis(req.seq.end) - rostime_millis_offset;
   
-  // TODO delete
-  char str[30];
-  sprintf(str, "ros_now_ms %lu", ros_now_ms);
-  nh.logwarn(str);
-  sprintf(str, "now_ms %lu", now_ms);
-  nh.logwarn(str);
-  sprintf(str, "rostime_millis_offset %lu", rostime_millis_offset);
-  nh.logwarn(str);
-  // TODO TODO i need to get it s.t. start_ms is < millis() here, preferably by a little bit of a margin
-  sprintf(str, "start_ms %lu", start_ms);
-  nh.logwarn(str);
-  sprintf(str, "end_ms %lu", end_ms);
-  nh.logwarn(str);
+  if (debug) {
+    char str[30];
+    sprintf(str, "ros_now_ms %lu", ros_now_ms);
+    nh.logwarn(str);
+    sprintf(str, "now_ms %lu", now_ms);
+    nh.logwarn(str);
+    sprintf(str, "rostime_millis_offset %lu", rostime_millis_offset);
+    nh.logwarn(str);
+    // TODO TODO i need to get it s.t. start_ms is < millis() here, preferably by a little bit of a margin
+    sprintf(str, "start_ms %lu", start_ms);
+    nh.logwarn(str);
+    sprintf(str, "end_ms %lu", end_ms);
+    nh.logwarn(str);
 
-  // TODO this is correct. why is it different from what i'm getting above?
-  int diff = req.seq.end.sec - req.seq.start.sec;
-  sprintf(str, "duration secs via ros %d", diff);
-  nh.logwarn(str);
+    // TODO this is correct. why is it different from what i'm getting above?
+    // TODO TODO still a problem?
+    int diff = req.seq.end.sec - req.seq.start.sec;
+    sprintf(str, "duration secs via ros %d", diff);
+    nh.logwarn(str);
+  }
 
   soonest_ms = to_millis(req.seq.pulse_seq[0].states[0].t);
   stimuli::Transition curr;
@@ -169,6 +183,10 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
 
   // TODO dynamically allocate? or use some kind of copy constructor and just keep request obj around?
   pulse_registered = true;
+
+  if (debug) {
+    nh.loginfo("stimulus arduino leaving load_next_sequence");
+  }
 }
 ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_seq", &load_next_sequence);
 
@@ -260,13 +278,26 @@ bool get_param(const char *n, char **param, bool required = false, int len = 1, 
 // TODO check for republishing node or fail (will be missing important parameters)
 bool get_params() {
   bool success;
+  int local_debug;
   int their_max;
 
   nh.loginfo("stimulus arduino attempting to get parameters");
 
-  success = get_param("olf/max_num_pins", &their_max);
-  //nh.logwarn(success
+  // TODO will this err if not set? any way to suppress that?
+  success = get_param("stimulus_arduino/debug", &local_debug);
   if (!success) {
+    debug = false;
+  } else {
+    if (local_debug == 0) {
+      debug = false;
+    } else {
+      debug = true;
+    }
+  }
+
+  success = get_param("olf/max_num_pins", &their_max);
+  if (!success) {
+    // TODO make fatal?
     nh.logwarn("parameter olf/max_num_pins needs to be set");
     return false;
   }
@@ -364,16 +395,23 @@ void update_pwm_pinstates() {
   }
 }
 
+// TODO maybe spinOnce occasionally in here?
 void update_pulses_ros() {
   // update pulses with transitions specified explicitly (slower changes)
+  // TODO TODO test soonest is updating correctly. initial value?
+  // TODO TODO TODO why not subtracting rostime_millis_offset here?
   if (soonest_ms <= millis()) {
+    // TODO maybe this seq storage can not be trusted?
+    // TODO TODO print and check
     for (int i = 0; i < seq.pulse_seq_length; i++) {
       // TODO - or + rostime_millis_offset? (i think this is right)
+      // TODO maybe next_state_index[i] isn't being updated correctly?
       if ((to_millis(seq.pulse_seq[i].states[next_state_index[i]].t) - \
            rostime_millis_offset) <= millis()) {
 
-        // TODO TODO test / debug w/ prints
         stimuli::State s = seq.pulse_seq[i].states[next_state_index[i]].s;
+        // TODO TODO TODO
+        // TODO maybe i should be explicitly zeroing next_state/times here? or elsewhere?
         if (s.ms_on == 0) {
           digitalWrite(seq.pulse_seq[i].pin, LOW);
         } else if (s.ms_off == 0) {
@@ -395,7 +433,7 @@ void update_pulses_ros() {
     unsigned long long curr_ms;
     soonest_ms = to_millis(seq.pulse_seq[0].states[next_state_index[0]].t);
     for (int i = 0; i < seq.pulse_seq_length; i++) {
-      // TODO check for / fix different wraparound than millis()
+      // TODO check for / fix different wraparound than millis() (? still an issue?)
       curr_ms = to_millis(seq.pulse_seq[i].states[next_state_index[i]].t);
       if (curr_ms < soonest_ms) {
         soonest_ms = curr_ms;
@@ -411,9 +449,11 @@ void update_pulses_ros() {
 }
 
 void end_sequence() {
+  // TODO add debug prints
   for (int i = 0; i < MAX_NUM_PINS; i++) {
     if (pins[i] != PIN_NOT_SET) {
       digitalWrite(pins_for_default[i], default_state[i]);
+    // TODO check not breaking prematurely? get rid of this?
     } else {
       break;
     }
@@ -425,11 +465,13 @@ void end_sequence() {
 // solution?
 void update_pulses_blocking() {
   nh.loginfo("stimulus arduino beginning sequence");
-  char str[30];
   digitalWrite(LED_BUILTIN, HIGH);
-  unsigned long long now_millis = millis();
-  sprintf(str, "millis() %lu", now_millis);
-  nh.logwarn(str);
+  if (debug) {
+    char str[30];
+    unsigned long long now_millis = millis();
+    sprintf(str, "millis() %lu", now_millis);
+    nh.logwarn(str);
+  }
   while (millis() < end_ms) {
     // while (micros() < end_us) {
     update_pulses_ros();
@@ -437,7 +479,7 @@ void update_pulses_blocking() {
   end_sequence();
   digitalWrite(LED_BUILTIN, LOW);
   nh.loginfo("stimulus arduino finished sequence");
-  // TODO how to not permanently lose sync with rosserial_python?
+  // TODO how to not lose sync with rosserial_python?
 }
 
 void setup() {
@@ -453,21 +495,19 @@ void setup() {
   // ever a chance of these first two calls taking > WDT_RESET?
   // i could limit their timeouts to prevent that?
   nh.getHardware()->setBaud(9600);
-  char str[42];
-  sprintf(str, "arduino using baudrate of %d", nh.getHardware()->getBaud());
   nh.initNode();
-  // to get time sync. may need to spin more times.
-  // remove?
   nh.spinOnce();
-  nh.loginfo(str); //
-  
+  // still need to spinOnce somewhere around here?
   nh.advertiseService(defaults_server);
   nh.advertiseService(server);
+  
   // keep trying to get params until succesful
   while (!get_params()) {
-    delay(500);
+    nh.spinOnce();
   }
+  
   nh.loginfo("stimulus arduino done getting parameters.");
+  // TODO maybe timeout here after a certain amount of time?
   while (!defaults_registered) {
     nh.spinOnce();
   }
@@ -487,6 +527,7 @@ void loop() {
   if (pulse_registered) {
     if (start_ms <= millis()) {
       update_pulses_blocking();
+    // TODO also check we are supposed to signal pins
     } else if (start_ms - signal_ms_before <= millis()) {
       signal_pins();
     }
