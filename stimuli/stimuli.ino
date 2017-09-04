@@ -329,6 +329,7 @@ void init_state() {
   }
   defaults_registered = false;
   pulse_registered = false;
+  // TODO TODO set via parameter
   signal_ms_before = 500;
 }
 
