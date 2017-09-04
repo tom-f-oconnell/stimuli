@@ -103,9 +103,11 @@ ros::ServiceServer<stimuli::LoadDefaultStatesRequest, stimuli::LoadDefaultStates
 // TODO what does it mean to have the ampersand here? not sure i've seen that...a
 void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPulseSeqResponse &res) {
   res.receive_time = nh.now();
+  /*
   if (debug) {
     nh.loginfo("stimulus arduino entering load_next_sequence");
   }
+  */
   res.request_time = req.seq.header.stamp;
   if (pulse_registered) {
     // TODO careful...
@@ -133,7 +135,8 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
   start_ms = to_millis(req.seq.start) - rostime_millis_offset;
   // TODO this actually a keyword problem ("end")?
   end_ms = to_millis(req.seq.end) - rostime_millis_offset;
-  
+
+  /*
   if (debug) {
     char str[30];
     sprintf(str, "ros_now_ms %lu", ros_now_ms);
@@ -154,6 +157,7 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
     sprintf(str, "duration secs via ros %d", diff);
     nh.logwarn(str);
   }
+  */
 
   soonest_ms = to_millis(req.seq.pulse_seq[0].states[0].t);
   stimuli::Transition curr;
@@ -184,9 +188,11 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
   // TODO dynamically allocate? or use some kind of copy constructor and just keep request obj around?
   pulse_registered = true;
 
+  /*
   if (debug) {
     nh.loginfo("stimulus arduino leaving load_next_sequence");
   }
+  */
 }
 ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_seq", &load_next_sequence);
 
@@ -469,12 +475,14 @@ void end_sequence() {
 void update_pulses_blocking() {
   nh.loginfo("stimulus arduino beginning sequence");
   digitalWrite(LED_BUILTIN, HIGH);
+  /*
   if (debug) {
     char str[30];
     unsigned long long now_millis = millis();
     sprintf(str, "millis() %lu", now_millis);
     nh.logwarn(str);
   }
+  */
   while (millis() < end_ms) {
     // while (micros() < end_us) {
     update_pulses_ros();
