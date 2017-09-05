@@ -75,6 +75,10 @@ void load_defaults(const stimuli::LoadDefaultStatesRequest &req, stimuli::LoadDe
   if (debug) {
     nh.loginfo("defaults:");
   }
+  // TODO break and err if length > defaults. or don't start.
+  if (req.defaults_length > MAX_NUM_PINS) {
+    fail("Trying to set defaults for more pins than available.");
+  }
   for (int i = 0; i < req.defaults_length; i++) {
     pins_for_default[i] = req.defaults[i].pin;
     pinMode(pins_for_default[i], OUTPUT);
@@ -136,7 +140,6 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
   // TODO this actually a keyword problem ("end")?
   end_ms = to_millis(req.seq.end) - rostime_millis_offset;
 
-  /*
   if (debug) {
     char str[30];
     sprintf(str, "ros_now_ms %lu", ros_now_ms);
@@ -157,7 +160,6 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
     sprintf(str, "duration secs via ros %d", diff);
     nh.logwarn(str);
   }
-  */
 
   soonest_ms = to_millis(req.seq.pulse_seq[0].states[0].t);
   stimuli::Transition curr;
@@ -460,10 +462,14 @@ void update_pulses_ros() {
 void end_sequence() {
   // TODO add debug prints
   for (int i = 0; i < MAX_NUM_PINS; i++) {
-    if (pins[i] != PIN_NOT_SET) {
+    if (pins_for_default[i] != PIN_NOT_SET) {
       digitalWrite(pins_for_default[i], default_state[i]);
+      char str[30];
+      sprintf(str, "writing %d to %d", pins_for_default[i], default_state[i]);
+      nh.loginfo(str);
     // TODO check not breaking prematurely? get rid of this?
     } else {
+      nh.logwarn("breaking");
       break;
     }
   }
@@ -483,9 +489,15 @@ void update_pulses_blocking() {
     nh.logwarn(str);
   }
   */
+  // TODO delete me
+  digitalWrite(61, HIGH);
+  digitalWrite(60, HIGH);
+  digitalWrite(6, HIGH);
+  //
   while (millis() < end_ms) {
-    // while (micros() < end_us) {
-    update_pulses_ros();
+  // while (micros() < end_us) {
+    // TODO uncomment me
+    //update_pulses_ros();
   }
   end_sequence();
   digitalWrite(LED_BUILTIN, LOW);
