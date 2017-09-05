@@ -27,6 +27,7 @@
 #define MAX_NUM_PINS 8
 #define PIN_NOT_SET -1
 #define NOT_PWM -1
+#define DONE -1
 
 // TODO test all time calculations for millis / micros rollover robustness (could use setMillis(-NNN))
 // TODO valgrind the output of this + the rosserial code?
@@ -50,7 +51,7 @@ char pins[MAX_NUM_PINS];
 char pins_for_default[MAX_NUM_PINS];
 unsigned char default_state[MAX_NUM_PINS];
 unsigned int next_state_index[MAX_NUM_PINS];
-unsigned int states_length[MAX_NUM_PINS];
+unsigned int last_state_index[MAX_NUM_PINS];
 char next_state[MAX_NUM_PINS];
 unsigned long next_time_ms[MAX_NUM_PINS];
 unsigned long ms_on[MAX_NUM_PINS];
@@ -173,7 +174,7 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
   for (int i = 0; i < req.seq.pulse_seq_length; i++) {
     pins[i] = req.seq.pulse_seq[i].pin;
     next_state_index[i] = 0;
-    states_length[i] = req.seq.pulse_seq[i].states_length;
+    last_state_index[i] = req.seq.pulse_seq[i].states_length - 1;
     curr = req.seq.pulse_seq[i].states[0];
     // cast?
     ms_on[i] = curr.s.ms_on;
@@ -424,12 +425,15 @@ void update_pulses_ros() {
   // update pulses with transitions specified explicitly (slower changes)
   // TODO TODO test soonest is updating correctly. initial value?
   // TODO TODO TODO why not subtracting rostime_millis_offset here?
-  if (soonest_ms <= millis()) {
+  unsigned long now_ms = millis();
+  // TODO fix rollover
+  if (soonest_ms <= now_ms) {
     // TODO maybe this seq storage can not be trusted?
     // TODO TODO print and check
     for (int i = 0; i < seq.pulse_seq_length; i++) {
-      if ((to_millis(seq.pulse_seq[i].states[next_state_index[i]].t) - \
-           rostime_millis_offset) <= millis()) {
+      // TODO TODO fix. try to compare durations rather than times... rollover!
+      if (next_state_index[i] != DONE && (to_millis(seq.pulse_seq[i].states[next_state_index[i]].t) - \
+           rostime_millis_offset) <= now_ms) {
 
         stimuli::State s = seq.pulse_seq[i].states[next_state_index[i]].s;
         if (s.ms_on == 0) {
@@ -438,12 +442,16 @@ void update_pulses_ros() {
           digitalWrite(seq.pulse_seq[i].pin, HIGH);
           if (s.ms_off != 0) {
             next_state[i] = LOW;
-            // TODO use same time as that in if statement above?
-            next_time_ms[i] = millis() + ms_on[i];
+            next_time_ms[i] = now_ms + ms_on[i];
           }
         }
-        // TODO also store lengths and check bounds?
-        next_state_index[i]++;
+        // TODO maybe reorganize?
+        
+        if (next_state_index[i] < last_state_index[i]) {
+          next_state_index[i]++;
+        } else if (next_state_index[i] == last_state_index[i]) {
+          next_state_index[i] = DONE;
+        }
       }
     }
 
