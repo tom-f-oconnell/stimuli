@@ -195,6 +195,9 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
     nh.loginfo("stimulus arduino leaving load_next_sequence");
   }
   */
+  char str[30];
+  sprintf(str, "leaving cb %lu", millis());
+  nh.logwarn(str);
 }
 ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_seq", &load_next_sequence);
 
@@ -389,6 +392,9 @@ void update_pwm_pinstates() {
     if (pins[i] != PIN_NOT_SET) {
       if (next_time_ms[i] <= millis()) {
         digitalWrite(pins[i], next_state[i]);
+        char str[30];
+        sprintf(str, "%d to %d", pins[i], next_state[i]);
+        nh.loginfo(str);
 
         // should i increment from previous or from actual time?
         // currently incrementing from previous goal time
@@ -451,6 +457,9 @@ void update_pulses_ros() {
       }
     }
     soonest_ms = soonest_ms - rostime_millis_offset;
+    char str[30];
+    sprintf(str, "soonest_ms %lu", soonest_ms);
+    nh.loginfo(str);
   }
 
   // TODO store minimum time in loop above to avoid need to loop until we are there?
@@ -464,12 +473,7 @@ void end_sequence() {
   for (int i = 0; i < MAX_NUM_PINS; i++) {
     if (pins_for_default[i] != PIN_NOT_SET) {
       digitalWrite(pins_for_default[i], default_state[i]);
-      char str[30];
-      sprintf(str, "writing %d to %d", pins_for_default[i], default_state[i]);
-      nh.loginfo(str);
-    // TODO check not breaking prematurely? get rid of this?
     } else {
-      nh.logwarn("breaking");
       break;
     }
   }
@@ -490,14 +494,19 @@ void update_pulses_blocking() {
   }
   */
   // TODO delete me
+  /*
   digitalWrite(61, HIGH);
   digitalWrite(60, HIGH);
   digitalWrite(6, HIGH);
+  */
   //
   while (millis() < end_ms) {
   // while (micros() < end_us) {
+    char str[30];
+    sprintf(str, "soonest_ms %lu", soonest_ms);
+    nh.loginfo(str);
     // TODO uncomment me
-    //update_pulses_ros();
+    update_pulses_ros();
   }
   end_sequence();
   digitalWrite(LED_BUILTIN, LOW);
@@ -541,6 +550,9 @@ void setup() {
 // TODO change things named pulse_XXX to sequence_XXX
 
 void loop() {
+  //char str[30];
+  //sprintf(str, "before spin %lu", millis());
+  //nh.logwarn(str);
   // bounds on how long this will take?
   // TODO debug compile flags to track distribution of times this takes, w/ emphasis on extreme values?
   // for reporting...
@@ -549,14 +561,22 @@ void loop() {
 
   if (pulse_registered) {
     if (start_ms <= millis()) {
+      char str[30];
+      sprintf(str, "starting at %lu", millis());
+      nh.logwarn(str);
       update_pulses_blocking();
+      sprintf(str, "ending at %lu", millis());
+      nh.logwarn(str);
     // TODO also check we are supposed to signal pins
-    } else if (start_ms - signal_ms_before <= millis()) {
-      signal_pins();
     }
+    /* else if (start_ms - signal_ms_before <= millis()) {
+      nh.logwarn("signalling pins");
+      signal_pins();
+      nh.logwarn("done with that");
+    }*/
   }
 
   // TODO why do they always delay?
   // how to prevent this from limiting my timing precision?
-  delay(10);
+  //delay(10);
 }
