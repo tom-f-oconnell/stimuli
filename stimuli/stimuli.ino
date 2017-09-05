@@ -26,6 +26,10 @@
 // or invalid pin #s requested?
 #define MAX_NUM_PINS 8
 #define PIN_NOT_SET -1
+#define NOT_PWM -1
+
+// TODO test all time calculations for millis / micros rollover robustness (could use setMillis(-NNN))
+// TODO valgrind the output of this + the rosserial code?
 
 ros::NodeHandle nh;
 
@@ -37,17 +41,18 @@ boolean pulse_registered;
 // TODO is this ever correctly set?? test!
 stimuli::PulseSeq seq;
 
-unsigned long long start_ms;
-unsigned long long end_ms;
-unsigned long long rostime_millis_offset;
-unsigned long long soonest_ms;
+unsigned long start_ms;
+unsigned long end_ms;
+unsigned long rostime_millis_offset;
+unsigned long soonest_ms;
 
 char pins[MAX_NUM_PINS];
 char pins_for_default[MAX_NUM_PINS];
 unsigned char default_state[MAX_NUM_PINS];
 unsigned int next_state_index[MAX_NUM_PINS];
-unsigned char next_state[MAX_NUM_PINS];
-unsigned long long next_time_ms[MAX_NUM_PINS];
+unsigned int states_length[MAX_NUM_PINS];
+char next_state[MAX_NUM_PINS];
+unsigned long next_time_ms[MAX_NUM_PINS];
 unsigned long ms_on[MAX_NUM_PINS];
 unsigned long ms_off[MAX_NUM_PINS];
 // replace w/ a boolean flag and signal all pins?
@@ -132,8 +137,8 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
 
   // fail if difference of left two terms is negative?
 
-  unsigned long long ros_now_ms = to_millis(nh.now());
-  unsigned long long now_ms = millis();
+  unsigned long ros_now_ms = to_millis(nh.now());
+  unsigned long now_ms = millis();
   rostime_millis_offset = ros_now_ms - now_ms;
   // TODO TODO can i definitely assume start_ms is correct? test!
   start_ms = to_millis(req.seq.start) - rostime_millis_offset;
@@ -163,14 +168,13 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
 
   soonest_ms = to_millis(req.seq.pulse_seq[0].states[0].t);
   stimuli::Transition curr;
-  unsigned long long curr_ms;
+  unsigned long curr_ms;
 
-  // TODO error if pulse_seq_length > max_num_pins
-  // assume that defaults and these arrive in same order? (and sort on PC side code?)
   for (int i = 0; i < req.seq.pulse_seq_length; i++) {
     pins[i] = req.seq.pulse_seq[i].pin;
     next_state_index[i] = 0;
-    curr = req.seq.pulse_seq[i].states[next_state_index[i]];
+    states_length[i] = req.seq.pulse_seq[i].states_length;
+    curr = req.seq.pulse_seq[i].states[0];
     // cast?
     ms_on[i] = curr.s.ms_on;
     ms_off[i] = curr.s.ms_off;
@@ -181,6 +185,7 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
     next_time_ms[i] = start_ms;
 
     curr_ms = to_millis(curr.t);
+    // TODO subtract before comparing
     if (curr_ms < soonest_ms) {
       soonest_ms = curr_ms;
     }
@@ -337,6 +342,8 @@ void init_state() {
     pins_for_default[i] = PIN_NOT_SET;
     pins[i] = PIN_NOT_SET;
     pins_to_signal[i] = PIN_NOT_SET;
+    // next_time_ms elements are undefined unless next_state is not this value
+    next_state[i] = NOT_PWM;
   }
   defaults_registered = false;
   pulse_registered = false;
@@ -378,18 +385,18 @@ void signal_pins() {
 
 
 // TODO unit test
-unsigned long long to_millis(ros::Time t) {
-  return (unsigned long long) (t.sec * 1000ull + t.nsec / 1000000ull);
+unsigned long to_millis(ros::Time t) {
+  return (unsigned long) (t.sec * 1000ull + t.nsec / 1000000ull);
 }
 
-unsigned long long to_micros(ros::Time t) {
+unsigned long to_micros(ros::Time t) {
   // TODO fix + test
-  return (unsigned long long) (t.sec * 1000000ull + t.nsec / 1000ull);
+  return (unsigned long) (t.sec * 1000000ull + t.nsec / 1000ull);
 }
 
 void update_pwm_pinstates() {
   for (int i = 0; i < MAX_NUM_PINS; i++) {
-    if (pins[i] != PIN_NOT_SET) {
+    if (pins[i] != PIN_NOT_SET && next_state[i] != NOT_PWM) {
       if (next_time_ms[i] <= millis()) {
         digitalWrite(pins[i], next_state[i]);
         char str[30];
@@ -421,34 +428,27 @@ void update_pulses_ros() {
     // TODO maybe this seq storage can not be trusted?
     // TODO TODO print and check
     for (int i = 0; i < seq.pulse_seq_length; i++) {
-      // TODO - or + rostime_millis_offset? (i think this is right)
-      // TODO maybe next_state_index[i] isn't being updated correctly?
       if ((to_millis(seq.pulse_seq[i].states[next_state_index[i]].t) - \
            rostime_millis_offset) <= millis()) {
 
         stimuli::State s = seq.pulse_seq[i].states[next_state_index[i]].s;
-        // TODO TODO TODO
-        // TODO maybe i should be explicitly zeroing next_state/times here? or elsewhere?
         if (s.ms_on == 0) {
           digitalWrite(seq.pulse_seq[i].pin, LOW);
-        } else if (s.ms_off == 0) {
-          digitalWrite(seq.pulse_seq[i].pin, HIGH);
         } else {
-          // TODO
-          // merge w/ above?
           digitalWrite(seq.pulse_seq[i].pin, HIGH);
-          ms_on[i] = s.ms_on;
-          ms_off[i] = s.ms_off;
-          next_state[i] = LOW;
-          // use same time as that in if statement above?
-          next_time_ms[i] = millis() + ms_on[i];
+          if (s.ms_off != 0) {
+            next_state[i] = LOW;
+            // TODO use same time as that in if statement above?
+            next_time_ms[i] = millis() + ms_on[i];
+          }
         }
+        // TODO also store lengths and check bounds?
         next_state_index[i]++;
       }
     }
 
-    unsigned long long curr_ms;
-    soonest_ms = to_millis(seq.pulse_seq[0].states[next_state_index[0]].t);
+    unsigned long curr_ms;
+    soonest_ms = to_millis(seq.pulse_seq[0].states[next_state_index[0]].t) - rostime_millis_offset;
     for (int i = 0; i < seq.pulse_seq_length; i++) {
       // TODO check for / fix different wraparound than millis() (? still an issue?)
       curr_ms = to_millis(seq.pulse_seq[i].states[next_state_index[i]].t);
@@ -456,6 +456,7 @@ void update_pulses_ros() {
         soonest_ms = curr_ms;
       }
     }
+    // TODO TODO need to do the subtraction before comparison to avoid wraparound problems?
     soonest_ms = soonest_ms - rostime_millis_offset;
     char str[30];
     sprintf(str, "soonest_ms %lu", soonest_ms);
@@ -488,7 +489,7 @@ void update_pulses_blocking() {
   /*
   if (debug) {
     char str[30];
-    unsigned long long now_millis = millis();
+    unsigned long now_millis = millis();
     sprintf(str, "millis() %lu", now_millis);
     nh.logwarn(str);
   }
