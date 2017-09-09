@@ -64,6 +64,8 @@ add_service_files(
   FILES
   LoadDefaultStates.srv
   LoadPulseSeq.srv
+  TestTransportLoadDefaultStatesReq.srv
+  TestTransportLoadPulseSeqReq.srv
 )
 
 ## Generate actions in the 'action' folder
