@@ -1,0 +1,6 @@
+Header header
+Sequence seq
+uint8[] pins_to_signal
+---
+time request_time
+time receive_time

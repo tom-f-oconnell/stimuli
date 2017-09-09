@@ -16,9 +16,9 @@
 // what happens if this isn't included?
 #include <ros/time.h>
 #include <stimuli/LoadDefaultStates.h>
-#include <stimuli/LoadPulseSeq.h>
+#include <stimuli/LoadSequence.h>
 #include <stimuli/TestTransportLoadDefaultStatesReq.h>
-#include <stimuli/TestTransportLoadPulseSeqReq.h>
+#include <stimuli/TestTransportLoadSequenceReq.h>
 
 #define MAX_PARAM_NAME_LENGTH 256
 // TODO compare to builtin related to board to validate?
@@ -40,7 +40,7 @@ boolean defaults_registered;
 boolean pulse_registered;
 
 // TODO is this ever correctly set?? test!
-//stimuli::PulseSeq seq;
+//stimuli::Sequence seq;
 
 unsigned long start_ms;
 unsigned long end_ms;
@@ -70,15 +70,17 @@ void test_defaults_req(const stimuli::TestTransportLoadDefaultStatesReqRequest &
 ros::ServiceServer<stimuli::TestTransportLoadDefaultStatesReqRequest, 
   stimuli::TestTransportLoadDefaultStatesReqResponse> test_defaults_server("test_defaults_req", &test_defaults_req);
 
-void test_loadseq_req(const stimuli::TestTransportLoadPulseSeqReqRequest &req, 
-                         stimuli::TestTransportLoadPulseSeqReqResponse &res) {
+// TODO just use this function for all test_Xsrv_req/res?
+void test_loadseq_req(const stimuli::TestTransportLoadSequenceReqRequest &req, 
+                         stimuli::TestTransportLoadSequenceReqResponse &res) {
   // TODO maybe just manually copy? (if possible...)
+  // or use defined input buffer size? (at risk of running out of memory because duplication)
   unsigned char buff[256];
   req.serialize(buff);
   res.deserialize(buff);
 }
-ros::ServiceServer<stimuli::TestTransportLoadPulseSeqReqRequest, 
-  stimuli::TestTransportLoadPulseSeqReqResponse> test_loadseq_server("test_loadseq_req", &test_loadseq_req);
+ros::ServiceServer<stimuli::TestTransportLoadSequenceReqRequest, 
+  stimuli::TestTransportLoadSequenceReqResponse> test_loadseq_server("test_loadseq_req", &test_loadseq_req);
 
 
 // not using params because it (seems) harder to get a parameter list of dynamic size...
@@ -129,37 +131,34 @@ ros::ServiceServer<stimuli::LoadDefaultStatesRequest, stimuli::LoadDefaultStates
 // pushing updates)
 // TODO update docs to remove :: and just concatenate? or am i missing something?
 // TODO what does it mean to have the ampersand here? not sure i've seen that...a
-void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPulseSeqResponse &res) {
-  char str[30];
-  for (int i=0;i<req.seq.pulse_seq_length;i++) {
-    sprintf(str, "i %d pin %d", i, req.seq.pulse_seq[i].pin);
-    nh.loginfo(str);
-    sprintf(str, "first s on %d off %d", req.seq.pulse_seq[i].states[0].s.ms_on, req.seq.pulse_seq[i].states[0].s.ms_off);
-    nh.loginfo(str);    
-    sprintf(str, "states_length %d", req.seq.pulse_seq[i].states_length);
-    nh.loginfo(str);
-    sprintf(str, "address of transition list %p", (void *) &req.seq.pulse_seq[i].states[0]);
-    nh.loginfo(str);
-  }
+void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSequenceResponse &res) {
   res.receive_time = nh.now();
-  /*
-  if (debug) {
-    nh.loginfo("stimulus arduino entering load_next_sequence");
-  }
-  */
-  res.request_time = req.seq.header.stamp;
+  res.request_time = req.header.stamp;
+
   if (pulse_registered) {
     fail("was sent another set of stimulus info before first expired");
   }
+  clear_pins();
+ 
   // TODO TODO TODO does this work or potentially fail (dangling pointer)? need to deep copy or is there easier workaround?
   // TODO test
   //seq = req.seq;
 
-  clear_pins();
+  char str[30];
+  sprintf(str, "seq_length %d", req.seq.seq_length);
+  nh.loginfo(str);
+ 
+  for (int i=0;i<req.seq.seq_length;i++) {
+    sprintf(str, "i %d pin %d", i, req.seq.pins[i]);
+    nh.loginfo(str);
+    // TODO will have to find first for each pin number to behave same as before
+    sprintf(str, "s on %d off %d", req.seq.seq[i].s.ms_on, req.seq.seq[i].s.ms_off);
+    nh.loginfo(str);    
+  }
 
-  // TODO TODO maybe this should not be sent separately? (just a bool parameter)
-  for (int i = 0; i < req.seq.pins_to_signal_length; i++) {
-    pins_to_signal[i] = req.seq.pins_to_signal[i];
+  // TODO TODO maybe this should not be sent separately? (just a flag parameter)
+  for (int i = 0; i < req.pins_to_signal_length; i++) {
+    pins_to_signal[i] = req.pins_to_signal[i];
   }
 
   // fail if difference of left two terms is negative?
@@ -193,48 +192,63 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
     nh.logwarn(str);
   }
 
-  soonest_ms = to_millis(req.seq.pulse_seq[0].states[0].t);
-  // TODO might this be causing memory issues? not sure...
+  // TODO either guarantee this list is sorted before leaving python or find minimum here
+  soonest_ms = to_millis(req.seq.seq[0].t);
+  
   stimuli::Transition curr;
   unsigned long curr_ms;
 
-  for (int i=0;i<req.seq.pulse_seq_length;i++) {
-    pins[i] = req.seq.pulse_seq[i].pin;
+  // TODO maybe assert seq.seq and seq.pins have same length?
+  unsigned char j = 0;
+  for (int i=0;i<req.seq.seq_length;i++) {
+    // TODO test
+    // TODO plan to sort python side, but will assert that time was not less than (?) last
+    // but what about wraparound? not a problem i suppose with the 64 bit ros time?
+    if (req.seq.pins[i] != pins[j]) {
+      if (j != 0) {
+        // will need to set last_state_index for last pin
+        // at the end of the loop
+        last_state_index[j-1] = i-1;
+      }
+      pins[j] = req.seq.pins[i];
+      // assumes soonest is first (receiving list sorted within each pin)
+      next_state_index[j] = i;
     
-    sprintf(str, "pin %d", pins[i]);
-    nh.loginfo(str);
-    
-    next_state_index[i] = 0;
-    last_state_index[i] = req.seq.pulse_seq[i].states_length - 1;
-    curr = req.seq.pulse_seq[i].states[0];
+      sprintf(str, "pin %d", pins[j]);
+      nh.loginfo(str);
+   
+      curr = req.seq.seq[i];
+      
+      sprintf(str, "first s on %d off %d", curr.s.ms_on, curr.s.ms_off);
+      nh.loginfo(str);
+      
+      // cast?
+      ms_on[j] = curr.s.ms_on;
+      ms_off[j] = curr.s.ms_off;
+      if (ms_on[j] == 0 || ms_off[j] == 0) {
+        next_state[j] = NOT_PWM;
+        nh.loginfo("setting not pwm");
+      } else {
+        next_state[j] = HIGH;
+        nh.loginfo("setting pwm");
+      }
 
-    // TODO why the hell are these all the values of the last one? is it not being transferred / (de)serialized properly?
-    sprintf(str, "first s on %d off %d", req.seq.pulse_seq[i].states[0].s.ms_on, req.seq.pulse_seq[i].states[0].s.ms_off);
-    nh.loginfo(str);
-    
-    // cast?
-    ms_on[i] = curr.s.ms_on;
-    ms_off[i] = curr.s.ms_off;
-    if (ms_on[i] == 0 || ms_off[i] == 0) {
-      next_state[i] = NOT_PWM;
-      nh.loginfo("setting not pwm");
-    } else {
-      next_state[i] = HIGH;
-      nh.loginfo("setting pwm");
-    }
+      // TODO only if pwm?
+      // TODO uniform start or set each to first transition time?
+      // assume pins already in default states by start?
+      next_time_ms[j] = start_ms;
 
-    // TODO TODO only if pwm?
-    // TODO uniform start or set each to first transition time?
-    // assume pins already in default states by start?
-    next_time_ms[i] = start_ms;
-
-    
-    curr_ms = to_millis(curr.t);
-    // TODO subtract before comparing
-    if (curr_ms < soonest_ms) {
-      soonest_ms = curr_ms;
+      // TODO despite sorting in python, this might be nice to the extent i can reuse code
+      // for inevitable sorting for second soonest? use tree / other nice data structure?
+      curr_ms = to_millis(curr.t);
+      // TODO subtract before comparing
+      if (curr_ms < soonest_ms) {
+        soonest_ms = curr_ms;
+      }
+      j++;
     }
   }
+  last_state_index[j] = req.seq.seq_length;
   soonest_ms = soonest_ms - rostime_millis_offset;
 
   // TODO  but i supposed the problem with this is that if no states are counted as ~ start above
@@ -247,15 +261,11 @@ void load_next_sequence(const stimuli::LoadPulseSeqRequest &req, stimuli::LoadPu
   nh.loginfo(str);
 
   // TODO dynamically allocate? or use some kind of copy constructor and just keep request obj around?
+  // TODO this flag does not prevent callback from overwriting stored LoadSequenceRequest object
+  // (only spinOnce-ing while this flag is true should prevent it, but has problems)
   pulse_registered = true;
-
-  /*
-  if (debug) {
-    nh.loginfo("stimulus arduino leaving load_next_sequence");
-  }
-  */
 }
-ros::ServiceServer<stimuli::LoadPulseSeqRequest, stimuli::LoadPulseSeqResponse> server("load_seq", &load_next_sequence);
+ros::ServiceServer<stimuli::LoadSequenceRequest, stimuli::LoadSequenceResponse> server("load_seq", &load_next_sequence);
 
 void reset() {
   noInterrupts();
@@ -370,12 +380,9 @@ bool get_params() {
   if (!success) {
     return false;
   }
-  /*
-   * TODO uncomment
   if (their_max > MAX_NUM_PINS) {
     fail("Arduino can't dynamically allocate pins. Change MAX_NUM_PINS in Arduino code to a higher value");
   }
-  */
 
   // TODO way to load them into variable of same name somehow (or compile time macro for it?)?
   // (so i can operate on a list of param names)
@@ -489,25 +496,26 @@ void update_pulses_ros() {
   // TODO wait, was initial value of soonest off? i thought this loop should be triggered once at beginning?
   /*
   if (soonest_ms <= now_ms) {
-    // TODO maybe this seq storage can not be trusted?
-    // TODO TODO print and check      
-    for (int i = 0; i < seq.pulse_seq_length; i++) {
+    for (int i = 0; i < seq.seq_length; i++) {
       sprintf(str, "p %d done %d", pins[i], next_state_index[i]);
       nh.loginfo(str);
       // TODO TODO fix. try to compare durations rather than times... rollover!
-      if (next_state_index[i] != DONE && (to_millis(seq.pulse_seq[i].states[next_state_index[i]].t) - \
+      // TODO fix part about states after message redefinition
+      if (next_state_index[i] != DONE && (to_millis(seq.seq[i].states[next_state_index[i]].t) - \
            rostime_millis_offset) <= now_ms) {
 
-        // TODO not sure this can be trusted
-        stimuli::State s = seq.pulse_seq[i].states[next_state_index[i]].s;
+        // TODO not sure this can be trusted (it probably can as long as we can guarantee
+        // callback isn't reached to load another one, which we can, but not spinOnce-ing)
+        // TODO fix state update
+        stimuli::State s = seq.seq[i].states[next_state_index[i]].s;
         sprintf(str, "new state on %d off %d", s.ms_on, s.ms_off);
         nh.loginfo(str);
         if (s.ms_on == 0) {
-          digitalWrite(seq.pulse_seq[i].pin, LOW);
+          digitalWrite(seq.pins[i], LOW);
           next_state[i] = NOT_PWM;
           nh.loginfo("setting NOT_PWM");
         } else {
-          digitalWrite(seq.pulse_seq[i].pin, HIGH);
+          digitalWrite(seq.pins[i], HIGH);
           if (s.ms_off != 0) {
             sprintf(str, "s.ms_off = %d", s.ms_off);
             nh.loginfo(str);
@@ -537,15 +545,18 @@ void update_pulses_ros() {
     nh.logwarn(str);
 
     unsigned long curr_ms;
-    soonest_ms = to_millis(seq.pulse_seq[0].states[next_state_index[0]].t);
+    // TODO this will only work if i sort by time in python. will still need to increment index here
+    // fix
+    soonest_ms = to_millis(seq.seq[0].t);
     sprintf(str, "init soonest %lu", soonest_ms);
     nh.logwarn(str);
-    for (int i = 0; i < seq.pulse_seq_length; i++) {
+    for (int i = 0; i < seq.seq_length; i++) {
       sprintf(str, "i=%d, nsi[i]=%d", i, next_state_index[i]);
       nh.logwarn(str);
       // TODO check for / fix different wraparound than millis() (? still an issue?)
       if (next_state_index[i] != DONE) {
-        curr_ms = to_millis(seq.pulse_seq[i].states[next_state_index[i]].t);
+        // TODO fix given sequence message redefinition
+        curr_ms = to_millis(seq.seq[i].states[next_state_index[i]].t);
         sprintf(str, "curr_ms %lu", curr_ms);
         nh.logwarn(str);
         // TODO fix rollover bug

@@ -55,17 +55,16 @@ add_message_files(
   State.msg
   DefaultState.msg
   Transition.msg
-  Pulse.msg
-  PulseSeq.msg
+  Sequence.msg
 )
 
 ## Generate services in the 'srv' folder
 add_service_files(
   FILES
   LoadDefaultStates.srv
-  LoadPulseSeq.srv
+  LoadSequence.srv
   TestTransportLoadDefaultStatesReq.srv
-  TestTransportLoadPulseSeqReq.srv
+  TestTransportLoadSequenceReq.srv
 )
 
 ## Generate actions in the 'action' folder
