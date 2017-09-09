@@ -1,2 +1,2 @@
-uint64 ms_on
-uint64 ms_off
+uint32 ms_on
+uint32 ms_off
