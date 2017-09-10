@@ -47,8 +47,10 @@ unsigned long end_ms;
 unsigned long rostime_millis_offset;
 unsigned long soonest_ms;
 
+// TODO make sure all printf specifiers are appropriate
 char pins[MAX_NUM_PINS];
 char pins_for_default[MAX_NUM_PINS];
+// TODO maybe make char for consistency?
 unsigned char default_state[MAX_NUM_PINS];
 unsigned int next_state_index[MAX_NUM_PINS];
 unsigned int last_state_index[MAX_NUM_PINS];
@@ -492,28 +494,39 @@ unsigned long to_micros(ros::Time t) {
 
 void update_pwm_pinstates() {
   char str[30];
+  //nh.loginfo("in update_pwm_pinstates");
   for (int i = 0; i < MAX_NUM_PINS; i++) {
-    if (pins[i] != PIN_NOT_SET && next_state[i] != NOT_PWM) {
-      // TODO make robust to rollover
-      if (next_time_ms[i] <= millis()) {
-        digitalWrite(pins[i], next_state[i]);
-        sprintf(str, "%d to %d", pins[i], next_state[i]);
-        nh.loginfo(str);
-
-        // should i increment from previous or from actual time?
-        // currently incrementing from previous goal time
-        if (next_state[i] == HIGH) {
-          next_time_ms[i] += ms_on[i];
-          next_state[i] = LOW;
+    /*
+    sprintf(str, "pin %d ns %u", pins[i], next_state[i]);   
+    nh.loginfo(str);
+    if (next_state[i] != NOT_PWM) {
+      nh.loginfo("pwm");
+    }
+    */
+    if (pins[i] != PIN_NOT_SET) {
+      if (next_state[i] != NOT_PWM) {
+        // TODO make robust to rollover
+        if (next_time_ms[i] <= millis()) {
+          digitalWrite(pins[i], next_state[i]);
+          sprintf(str, "%d to %u", pins[i], next_state[i]);
+          nh.loginfo(str);
+  
+          // should i increment from previous or from actual time?
+          // currently incrementing from previous goal time
+          if (next_state[i] == HIGH) {
+            next_time_ms[i] += ms_on[i];
+            next_state[i] = LOW;
+          } else {
+            next_time_ms[i] += ms_off[i];
+            next_state[i] = HIGH;
+          }
         } else {
-          next_time_ms[i] += ms_off[i];
-          next_state[i] = HIGH;
+          //sprintf(str, "p %d next_time_ms %lu", pins[i], next_time_ms[i]);
+          //nh.loginfo(str);
         }
-      } else {
-        sprintf(str, "p %d next_time_ms %lu", pins[i], next_time_ms[i]);
-        nh.loginfo(str);
       }
     } else {
+      // if we reach an element of pins that is PIN_NOT_SET, no elements after will be set
       return;
     }
   }
