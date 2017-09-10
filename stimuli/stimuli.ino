@@ -19,6 +19,7 @@
 #include <stimuli/LoadSequence.h>
 #include <stimuli/TestTransportLoadDefaultStatesReq.h>
 #include <stimuli/TestTransportLoadSequenceReq.h>
+#include <stimuli/TestTransitionsRT.h>
 
 #define MAX_PARAM_NAME_LENGTH 256
 // TODO compare to builtin related to board to validate?
@@ -70,6 +71,29 @@ void test_defaults_req(const stimuli::TestTransportLoadDefaultStatesReqRequest &
 ros::ServiceServer<stimuli::TestTransportLoadDefaultStatesReqRequest, 
   stimuli::TestTransportLoadDefaultStatesReqResponse> test_defaults_server("test_defaults_req", &test_defaults_req);
 
+/*
+void test_transitions_rt(const stimuli::TestTransitionsRTRequest &req, 
+                         stimuli::TestTransitionsRTResponse &res) {
+  // TODO maybe just manually copy? (if possible...)
+  // or use defined input buffer size? (at risk of running out of memory because duplication)
+  unsigned char buff[256];
+  req.serialize(buff);
+  char str[30];
+  for (int i=0;i<req.seq_length;i++) {
+    sprintf(str, "on %lu off %lu", req.seq[i].s.ms_on, req.seq[i].s.ms_off);
+    nh.loginfo(str);
+    if (req.seq[i].s.ms_off == 0) {
+      nh.loginfo("ms_off was 0");
+    }
+  }
+  res.deserialize(buff);
+  res.seq[0].s.ms_on = 11;
+  res.seq[0].s.ms_off = 9;
+}
+ros::ServiceServer<stimuli::TestTransitionsRTRequest, 
+  stimuli::TestTransitionsRTResponse> test_transitions_server("test_transitions_rt", &test_transitions_rt);
+*/
+
 // TODO just use this function for all test_Xsrv_req/res?
 void test_loadseq_req(const stimuli::TestTransportLoadSequenceReqRequest &req, 
                          stimuli::TestTransportLoadSequenceReqResponse &res) {
@@ -77,7 +101,18 @@ void test_loadseq_req(const stimuli::TestTransportLoadSequenceReqRequest &req,
   // or use defined input buffer size? (at risk of running out of memory because duplication)
   unsigned char buff[256];
   req.serialize(buff);
+  char str[30];
+  for (int i=0;i<req.seq.seq_length;i++) {
+    // TODO how can ms_off here be 0 (and in load_seq), yet response is correct in python?
+    sprintf(str, "req s on %lu off %lu", req.seq.seq[i].s.ms_on, req.seq.seq[i].s.ms_off);
+    nh.loginfo(str);
+  }
   res.deserialize(buff);
+  // and these ms_off fields are also 0...
+  for (int i=0;i<res.seq.seq_length;i++) {
+    sprintf(str, "res s on %lu off %lu", res.seq.seq[i].s.ms_on, res.seq.seq[i].s.ms_off);
+    nh.loginfo(str);
+  }
 }
 ros::ServiceServer<stimuli::TestTransportLoadSequenceReqRequest, 
   stimuli::TestTransportLoadSequenceReqResponse> test_loadseq_server("test_loadseq_req", &test_loadseq_req);
@@ -145,15 +180,14 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   //seq = req.seq;
 
   char str[30];
-  sprintf(str, "seq_length %d", req.seq.seq_length);
+  sprintf(str, "seq_length %lu", req.seq.seq_length);
   nh.loginfo(str);
  
   for (int i=0;i<req.seq.seq_length;i++) {
     sprintf(str, "i %d pin %d", i, req.seq.pins[i]);
     nh.loginfo(str);
-    // TODO will have to find first for each pin number to behave same as before
-    sprintf(str, "s on %d off %d", req.seq.seq[i].s.ms_on, req.seq.seq[i].s.ms_off);
-    nh.loginfo(str);    
+    sprintf(str, "s on %lu off %lu", req.seq.seq[i].s.ms_on, req.seq.seq[i].s.ms_off);
+    nh.loginfo(str);
   }
 
   // TODO TODO maybe this should not be sent separately? (just a flag parameter)
@@ -219,7 +253,7 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
    
       curr = req.seq.seq[i];
       
-      sprintf(str, "first s on %d off %d", curr.s.ms_on, curr.s.ms_off);
+      sprintf(str, "first s on %lu off %lu", curr.s.ms_on, curr.s.ms_off);
       nh.loginfo(str);
       
       // cast?
@@ -508,7 +542,7 @@ void update_pulses_ros() {
         // callback isn't reached to load another one, which we can, but not spinOnce-ing)
         // TODO fix state update
         stimuli::State s = seq.seq[i].states[next_state_index[i]].s;
-        sprintf(str, "new state on %d off %d", s.ms_on, s.ms_off);
+        sprintf(str, "new state on %lu off %lu", s.ms_on, s.ms_off);
         nh.loginfo(str);
         if (s.ms_on == 0) {
           digitalWrite(seq.pins[i], LOW);
@@ -517,7 +551,7 @@ void update_pulses_ros() {
         } else {
           digitalWrite(seq.pins[i], HIGH);
           if (s.ms_off != 0) {
-            sprintf(str, "s.ms_off = %d", s.ms_off);
+            sprintf(str, "s.ms_off = %lu", s.ms_off);
             nh.loginfo(str);
             nh.loginfo("setting PWM!!!");
             next_state[i] = LOW;
@@ -648,6 +682,7 @@ void setup() {
   nh.getHardware()->setBaud(9600);
   nh.initNode();
 
+  //nh.advertiseService(test_transitions_server); 
   nh.advertiseService(test_defaults_server);
   nh.advertiseService(test_loadseq_server);
   
