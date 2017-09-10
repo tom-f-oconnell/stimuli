@@ -19,7 +19,6 @@
 #include <stimuli/LoadSequence.h>
 #include <stimuli/TestTransportLoadDefaultStatesReq.h>
 #include <stimuli/TestTransportLoadSequenceReq.h>
-#include <stimuli/TestTransitionsRT.h>
 
 #define MAX_PARAM_NAME_LENGTH 256
 // TODO compare to builtin related to board to validate?
@@ -270,6 +269,7 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
       // TODO only if pwm?
       // TODO uniform start or set each to first transition time?
       // assume pins already in default states by start?
+      // TODO TODO fix. this makes first s.t meaningless (pins set to next state here)
       next_time_ms[j] = start_ms;
 
       // TODO despite sorting in python, this might be nice to the extent i can reuse code
@@ -491,12 +491,12 @@ unsigned long to_micros(ros::Time t) {
 }
 
 void update_pwm_pinstates() {
+  char str[30];
   for (int i = 0; i < MAX_NUM_PINS; i++) {
     if (pins[i] != PIN_NOT_SET && next_state[i] != NOT_PWM) {
       // TODO make robust to rollover
       if (next_time_ms[i] <= millis()) {
         digitalWrite(pins[i], next_state[i]);
-        char str[30];
         sprintf(str, "%d to %d", pins[i], next_state[i]);
         nh.loginfo(str);
 
@@ -509,6 +509,9 @@ void update_pwm_pinstates() {
           next_time_ms[i] += ms_off[i];
           next_state[i] = HIGH;
         }
+      } else {
+        sprintf(str, "p %d next_time_ms %lu", pins[i], next_time_ms[i]);
+        nh.loginfo(str);
       }
     } else {
       return;
@@ -607,8 +610,6 @@ void update_pulses_ros() {
     nh.loginfo(str);
   }
   */
-  // TODO 2500 in state maybe meant i was running off edge of state array?
-
   // TODO store minimum time in loop above to avoid need to loop until we are there?
   // maybe call this multiple times for each of the above?
   // update pins locked in a specified squarewave until next explicit transition
