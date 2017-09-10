@@ -65,60 +65,6 @@ int odor_signaling_pin;
 
 // TODO TODO warn if loading something that demands more memory than the arduino has
 
-void test_defaults_req(const stimuli::TestTransportLoadDefaultStatesReqRequest &req, 
-                         stimuli::TestTransportLoadDefaultStatesReqResponse &res) {
-  // TODO how to appropriately copy over?
-}
-ros::ServiceServer<stimuli::TestTransportLoadDefaultStatesReqRequest, 
-  stimuli::TestTransportLoadDefaultStatesReqResponse> test_defaults_server("test_defaults_req", &test_defaults_req);
-
-/*
-void test_transitions_rt(const stimuli::TestTransitionsRTRequest &req, 
-                         stimuli::TestTransitionsRTResponse &res) {
-  // TODO maybe just manually copy? (if possible...)
-  // or use defined input buffer size? (at risk of running out of memory because duplication)
-  unsigned char buff[256];
-  req.serialize(buff);
-  char str[30];
-  for (int i=0;i<req.seq_length;i++) {
-    sprintf(str, "on %lu off %lu", req.seq[i].s.ms_on, req.seq[i].s.ms_off);
-    nh.loginfo(str);
-    if (req.seq[i].s.ms_off == 0) {
-      nh.loginfo("ms_off was 0");
-    }
-  }
-  res.deserialize(buff);
-  res.seq[0].s.ms_on = 11;
-  res.seq[0].s.ms_off = 9;
-}
-ros::ServiceServer<stimuli::TestTransitionsRTRequest, 
-  stimuli::TestTransitionsRTResponse> test_transitions_server("test_transitions_rt", &test_transitions_rt);
-*/
-
-// TODO just use this function for all test_Xsrv_req/res?
-void test_loadseq_req(const stimuli::TestTransportLoadSequenceReqRequest &req, 
-                         stimuli::TestTransportLoadSequenceReqResponse &res) {
-  // TODO maybe just manually copy? (if possible...)
-  // or use defined input buffer size? (at risk of running out of memory because duplication)
-  unsigned char buff[256];
-  req.serialize(buff);
-  char str[30];
-  for (int i=0;i<req.seq.seq_length;i++) {
-    // TODO how can ms_off here be 0 (and in load_seq), yet response is correct in python?
-    sprintf(str, "req s on %lu off %lu", req.seq.seq[i].s.ms_on, req.seq.seq[i].s.ms_off);
-    nh.loginfo(str);
-  }
-  res.deserialize(buff);
-  // and these ms_off fields are also 0...
-  for (int i=0;i<res.seq.seq_length;i++) {
-    sprintf(str, "res s on %lu off %lu", res.seq.seq[i].s.ms_on, res.seq.seq[i].s.ms_off);
-    nh.loginfo(str);
-  }
-}
-ros::ServiceServer<stimuli::TestTransportLoadSequenceReqRequest, 
-  stimuli::TestTransportLoadSequenceReqResponse> test_loadseq_server("test_loadseq_req", &test_loadseq_req);
-
-
 // not using params because it (seems) harder to get a parameter list of dynamic size...
 // not sure why they didn't implement them simiarly, especially considering all param types seem to be contained in
 // std_msgs...
@@ -180,6 +126,7 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   // TODO test
   //seq = req.seq;
 
+  /*
   char str[30];
   sprintf(str, "seq_length %lu", req.seq.seq_length);
   nh.loginfo(str);
@@ -190,6 +137,7 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
     sprintf(str, "s on %lu off %lu", req.seq.seq[i].s.ms_on, req.seq.seq[i].s.ms_off);
     nh.loginfo(str);
   }
+  */
 
   // TODO TODO maybe this should not be sent separately? (just a flag parameter)
   for (int i = 0; i < req.pins_to_signal_length; i++) {
@@ -206,8 +154,8 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   // TODO this actually a keyword problem ("end")?
   end_ms = to_millis(req.seq.end) - rostime_millis_offset;
 
+  char str[30];
   if (debug) {
-    char str[30];
     sprintf(str, "ros_now_ms %lu", ros_now_ms);
     nh.logwarn(str);
     sprintf(str, "now_ms %lu", now_ms);
@@ -248,24 +196,16 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
       pins[j] = req.seq.pins[i];
       // assumes soonest is first (receiving list sorted within each pin)
       next_state_index[j] = i;
-    
-      sprintf(str, "pin %d", pins[j]);
-      nh.loginfo(str);
    
       curr = req.seq.seq[i];
-      
-      sprintf(str, "first s on %lu off %lu", curr.s.ms_on, curr.s.ms_off);
-      nh.loginfo(str);
       
       // cast?
       ms_on[j] = curr.s.ms_on;
       ms_off[j] = curr.s.ms_off;
       if (ms_on[j] == 0 || ms_off[j] == 0) {
         next_state[j] = NOT_PWM;
-        nh.loginfo("setting not pwm");
       } else {
         next_state[j] = HIGH;
-        nh.loginfo("setting pwm");
       }
 
       // TODO only if pwm?
@@ -493,23 +433,12 @@ unsigned long to_micros(ros::Time t) {
 }
 
 void update_pwm_pinstates() {
-  char str[30];
-  //nh.loginfo("in update_pwm_pinstates");
   for (int i = 0; i < MAX_NUM_PINS; i++) {
-    /*
-    sprintf(str, "pin %d ns %u", pins[i], next_state[i]);   
-    nh.loginfo(str);
-    if (next_state[i] != NOT_PWM) {
-      nh.loginfo("pwm");
-    }
-    */
     if (pins[i] != PIN_NOT_SET) {
       if (next_state[i] != NOT_PWM) {
         // TODO make robust to rollover
         if (next_time_ms[i] <= millis()) {
           digitalWrite(pins[i], next_state[i]);
-          sprintf(str, "%d to %u", pins[i], next_state[i]);
-          nh.loginfo(str);
   
           // should i increment from previous or from actual time?
           // currently incrementing from previous goal time
@@ -520,9 +449,6 @@ void update_pwm_pinstates() {
             next_time_ms[i] += ms_off[i];
             next_state[i] = HIGH;
           }
-        } else {
-          //sprintf(str, "p %d next_time_ms %lu", pins[i], next_time_ms[i]);
-          //nh.loginfo(str);
         }
       }
     } else {
@@ -695,10 +621,6 @@ void setup() {
   // i could limit their timeouts to prevent that?
   nh.getHardware()->setBaud(9600);
   nh.initNode();
-
-  //nh.advertiseService(test_transitions_server); 
-  nh.advertiseService(test_defaults_server);
-  nh.advertiseService(test_loadseq_server);
   
   nh.spinOnce();
   // still need to spinOnce somewhere around here?
