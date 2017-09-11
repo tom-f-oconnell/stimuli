@@ -24,7 +24,7 @@
 // TODO compare to builtin related to board to validate?
 // TODO maybe just make arbitrarily large and err if used > # actually available on board?
 // or invalid pin #s requested?
-#define MAX_NUM_PINS 8
+#define MAX_NUM_PINS 12
 #define PIN_NOT_SET -1
 #define NOT_PWM -1
 #define DONE -1
@@ -155,6 +155,7 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   end_ms = to_millis(req.seq.end) - rostime_millis_offset;
 
   char str[30];
+  /*
   if (debug) {
     sprintf(str, "ros_now_ms %lu", ros_now_ms);
     nh.logwarn(str);
@@ -174,6 +175,7 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
     sprintf(str, "duration secs via ros %d", diff);
     nh.logwarn(str);
   }
+  */
 
   // TODO either guarantee this list is sorted before leaving python or find minimum here
   soonest_ms = to_millis(req.seq.seq[0].t);
