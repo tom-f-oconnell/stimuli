@@ -1,7 +1,10 @@
 <launch>
   <arg name="port" default="/dev/ttyACM0" />
+  <arg name="params" default="stimulus_parameters.yaml" />
 
+  <rosparam command="load" file="$(arg params)" />
   <param name="stimulus_arduino/debug" value="1" type="int" />
+  <!-- TODO just load from same parameter file -->
   <param name="olf/max_num_pins" value="12" type="int" />
   
   <node name="stimulus_loader" pkg="stimuli" type="test_valves.py" output="screen" required="true" />

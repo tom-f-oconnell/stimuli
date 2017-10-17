@@ -14,6 +14,8 @@ from stimuli.msg import Sequence, Transition, State, DefaultState
 from stimuli.srv import LoadSequenceRequest
 from stimuli_loader import StimuliLoader
 
+import numpy as np
+
 import sys
 
 # TODO do i ever want to train the same flies on different pairs of odors sequentially?
@@ -40,7 +42,7 @@ odor_panel = {'4-methylcyclohexanol': (-2,),
 # TODO way to load parameter yaml directly? (for testing without ROS running)
 
 reinforced_odor_side_order = rospy.get_param('olf/reinforced_odor_side_order')
-train_one_odor_at_a_time = rospy.get_param('olf/train_one_odor_at_a_time')
+train_one_odor_at_a_time = rospy.get_param('olf/train_one_odor_at_a_time', False)
 
 training_blocks = rospy.get_param('olf/training_blocks')
 prestimulus_delay_s = rospy.get_param('olf/prestimulus_delay_s')
@@ -53,13 +55,17 @@ beyond_posttest_s = rospy.get_param('olf/beyond_posttest_s')
 
 left_pins = rospy.get_param('olf/left_pins')
 right_pins = rospy.get_param('olf/right_pins')
-separate_balances = rospy.get_param('olf/separate_balances')
-left_balance = rospy.get_param('olf/left_balance')
-right_balance = rospy.get_param('olf/right_balance')
-balance_normally_flowing = rospy.get_param('olf/balance_normally_flowing')
+separate_balances = rospy.get_param('olf/separate_balances', False)
+left_balance = rospy.get_param('olf/left_balance', None)
+right_balance = rospy.get_param('olf/right_balance', None)
 
-shock_ms_on = rospy.get_param('zap/shock_ms_on')
-shock_ms_off = rospy.get_param('zap/shock_ms_off')
+if separate_balances and (left_balance is None or right_balance is None):
+    raise ValueError('need to specify balance pins')
+
+balance_normally_flowing = rospy.get_param('olf/balance_normally_flowing', True)
+
+shock_ms_on = rospy.get_param('zap/shock_ms_on', 0)
+shock_ms_off = rospy.get_param('zap/shock_ms_off', 1)
 
 left_shock = rospy.get_param('zap/left')
 right_shock = rospy.get_param('zap/right')
@@ -97,19 +103,26 @@ else:
 if generate:
     rospy.loginfo('did not find saved odors and odor->pin mappings to load')
     #odors = list(odor_panel)
+    # TODO put in config file
     mock = ('paraffin (mock)', 0)
     #odors = [('4-methylcyclohexanol', -2), ('3-octanol', -2)]
-    odors = [('ethanol', -0.5), ('air', 0)]
+    odors = rospy.get_param('olf/odors', ['UNSPECIFIED_ODOR'])
+    # TODO fix
+    odors = list(map(lambda x: (x, np.nan), odors))
     #odors.append(mock)
+
+    print(odors, len(odors), left_pins)
 
     left_pins = random.sample(left_pins, len(odors))
     right_pins = random.sample(right_pins, len(odors))
 
-    with open(daily_connections_filename, 'wb') as f:
-        rospy.loginfo('temporarily saving odors and odor->pin mappings to ' + \
-            daily_connections_filename + ', for reuse in other experiments today.')
-        pickle.dump([odors, left_pins, right_pins], f)
-        # TODO verify it saved correctly?
+    # TODO improve
+    if len(odors) > 1:
+        with open(daily_connections_filename, 'wb') as f:
+            rospy.loginfo('temporarily saving odors and odor->pin mappings to ' + \
+                daily_connections_filename + ', for reuse in other experiments today.')
+            pickle.dump([odors, left_pins, right_pins], f)
+            # TODO verify it saved correctly?
 
 # TODO
 # randomly break stimuli into groups fitting into the number of 
@@ -129,9 +142,19 @@ rospy.loginfo('Right pins:')
 for pin, odor_pair in sorted(zip(right_pins, odors), key=lambda x: x[0]):
     rospy.loginfo(str(pin) + ' -> ' + str(odor_pair))
 
-reinforced, unreinforced = random.sample(odors, 2)
-rospy.loginfo('pairing shock with '  + str(reinforced))
-rospy.loginfo('unpaired ' + str(unreinforced))
+# TODO how to support no mock? (potentially just 1 odor in total)
+# TODO fix hack
+if len(odors) == 1:
+    reinforced = odors[0]
+    unreinforced = None
+    rospy.logwarn('not pulsing mock on opposite side')
+else:
+    # TODO rename
+    reinforced, unreinforced = random.sample(odors, 2)
+
+if len(odors) > 1 and train_blocks != 0:
+    rospy.loginfo('pairing shock with '  + str(reinforced))
+    rospy.loginfo('unpaired ' + str(unreinforced))
 
 # TODO also only start recording when this is done?
 raw_input('Press Enter when the odor vials are connected.')
@@ -193,9 +216,15 @@ class StimuliGenerator:
 
         else:
             if self.current_side_is_left:
-                pins = [odors2left_pins[reinforced], odors2right_pins[unreinforced]]
+                if not unreinforced is None:
+                    pins = [odors2left_pins[reinforced], odors2right_pins[unreinforced]]
+                else:
+                    pins = [odors2left_pins[reinforced]]
             else:
-                pins = [odors2left_pins[unreinforced], odors2right_pins[reinforced]]
+                if not unreinforced is None:
+                    pins = [odors2left_pins[unreinforced], odors2right_pins[reinforced]]
+                else:
+                    pins = [odors2right_pins[reinforced]]
 
         # TODO will need to make sure pins aren't turned into a set later
         for p in pins:
@@ -279,6 +308,7 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 gen = StimuliGenerator()
 t0_sec = gen.current_t0.to_sec()
 
+# TODO repeat code to accommodate variable number of blocks for test
 trial_structure = [gen.delay(prestimulus_delay_s), \
                    gen.test(), \
                    gen.delay(pretest_to_train_s)] + \

@@ -23,7 +23,14 @@ class ValveTester:
         rospy.sleep(8.0)
 
         rospy.loginfo('valve_tester sending default states')
-        pins_to_test = range(54,62)
+        left_pins = rospy.get_param('olf/left_pins', [])
+        right_pins = rospy.get_param('olf/right_pins', [])
+
+        pins_to_test = left_pins + right_pins
+        if len(pins_to_test) == 0:
+            raise ValueError('need some pins to test. specify olf/right_pins ' + \
+                'and olf/left_pins as ROS parameters that are lists of integers.')
+
         # all the valves should have their control pins LOW by default (0v)
         default_states = [DefaultState(p, False) for p in set(pins_to_test)]
         try:
