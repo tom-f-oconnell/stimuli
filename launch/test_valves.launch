@@ -4,7 +4,7 @@
   <param name="stimulus_arduino/debug" value="1" type="int" />
   <param name="olf/max_num_pins" value="12" type="int" />
   
-  <node name="stimulus_loader" pkg="choice" type="test_valves.py" output="screen" required="true" />
+  <node name="stimulus_loader" pkg="stimuli" type="test_valves.py" output="screen" required="true" />
  
   <!-- TODO is this explicit find syntax idiomatic or is there a simpler way to find .launch files? -->
   <include file="$(find stimuli)/launch/stimulus_arduino.launch">
