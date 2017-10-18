@@ -157,7 +157,10 @@ if len(odors) > 1 and train_blocks != 0:
     rospy.loginfo('unpaired ' + str(unreinforced))
 
 # TODO also only start recording when this is done?
-raw_input('Press Enter when the odor vials are connected.')
+# TODO when should i wait / not wait? need the param?
+wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
+if wait_for_keypress:
+    raw_input('Press Enter when the odor vials are connected.')
 
 odors2left_pins = dict(zip(odors, left_pins))
 odors2right_pins = dict(zip(odors, right_pins))
@@ -327,10 +330,10 @@ rospy.logdebug('trial_structure', trial_structure)
 # high_pins = pins that default to high (5v)
 # pins should be in the default state during the intertrial interval
 low_pins = left_pins + right_pins + [left_shock, right_shock]
+high_pins = []
 if separate_balances:
     if balance_normally_flowing:
         low_pins += [left_balance, right_balance]
-        high_pins = []
     else:
         high_pins = [left_balance, right_balance]
 

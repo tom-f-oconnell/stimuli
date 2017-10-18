@@ -1,1 +1,4 @@
 ros_lib
+*.pyc
+*.swo
+*.swp
