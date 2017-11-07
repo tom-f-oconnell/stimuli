@@ -1,3 +1,5 @@
+-might make sense to move one of the configs from the choice repo (for odor_randomizer) to this repo, at least as an example, if not to also serve as the parameter file actually invoked by the choice code.
+
 use a service / another flag in return of defaults to only proceed with callbacks after
 parameters are all set?
 
