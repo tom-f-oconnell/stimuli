@@ -206,6 +206,7 @@ class StimuliGenerator:
                 balance_transition = [Transition(self.current_t0, low)]
 
             for p in balance_pins:
+                # TODO won't this len always be 1? is this a bug? why did i do it this way?
                 expanded_pins.extend(len(balance_transition) * [p])
                 seq.extend(balance_transition)
 

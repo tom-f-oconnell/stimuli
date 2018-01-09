@@ -1,0 +1,18 @@
+<launch>
+  <arg name="params" default="stimulus_parameters.yaml" />
+  <arg name="seconds" default="60" />
+  <arg name="port" default="/dev/ttyACM0" />
+
+  <rosparam command="load" file="$(arg params)" />
+  <!-- TODO keep this? -->
+  <param name="stimulus_arduino/debug" value="1" type="int" />
+  <param name="olf/max_num_pins" value="8" type="int" />
+  <param name="olf/pid_duration" value="$(arg seconds)" type="int" />
+  
+  <node name="stimulus_loader" pkg="stimuli" type="test_stimulus.py" output="screen" required="true" />
+ 
+  <!-- TODO is this explicit find syntax idiomatic or is there a simpler way to find .launch files? -->
+  <include file="$(find stimuli)/launch/stimulus_arduino.launch">
+    <arg name="port" value="$(arg port)" />
+  </include>
+</launch>

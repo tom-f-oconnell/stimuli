@@ -26,13 +26,22 @@ class ValveTester:
         left_pins = rospy.get_param('olf/left_pins', [])
         right_pins = rospy.get_param('olf/right_pins', [])
 
-        pins_to_test = left_pins + right_pins
+        if rospy.get_param('olf/separate_balances', True):
+            lb = rospy.get_param('olf/left_balance')
+            rb = rospy.get_param('olf/right_balance')
+            left_pins.append(lb)
+            right_pins.append(rb)
+            # TODO also check param that controls balance direction?
+
+        pins_to_test = sorted(left_pins + right_pins)
         if len(pins_to_test) == 0:
             raise ValueError('need some pins to test. specify olf/right_pins ' + \
                 'and olf/left_pins as ROS parameters that are lists of integers.')
 
         # all the valves should have their control pins LOW by default (0v)
-        default_states = [DefaultState(p, False) for p in set(pins_to_test)]
+        default_states = [DefaultState(p, False) for p in \
+            set(pins_to_test)]
+
         try:
             h = Header()
             h.stamp = rospy.Time.now()
@@ -49,6 +58,7 @@ class ValveTester:
                 h = Header()
                 now = rospy.Time.now()
                 h.stamp = now
+                # TODO why these? why not set via parameters? (diff file though? in package?)
                 start = now + rospy.Duration.from_sec(1.5)
                 end = now + rospy.Duration.from_sec(6.5)
                 high = Transition(t=start, s=State(ms_on=1, ms_off=0))

@@ -3,3 +3,6 @@
 use a service / another flag in return of defaults to only proceed with callbacks after
 parameters are all set?
 
+POWER CYCLING ARDUINO SEEMS LIKE IT MIGHT NOT RESET VALVES NOW (it should)
+is this an electronics issue w/ Wilson lab MOSFET driver? mechanism, otherwise?
+my imagination?

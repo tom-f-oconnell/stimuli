@@ -233,11 +233,6 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   // it is unlikely any will be set in first iteration
   //soonest_ms = start_ms;
   
-  // TODO should i just set this to the start? and forgo the calculation?
-  // or forgo start being passed in the future?
-  sprintf(str, "soonest_ms %lu", soonest_ms);
-  nh.loginfo(str);
-
   // TODO dynamically allocate? or use some kind of copy constructor and just keep request obj around?
   // TODO this flag does not prevent callback from overwriting stored LoadSequenceRequest object
   // (only spinOnce-ing while this flag is true should prevent it, but has problems)
@@ -657,13 +652,7 @@ void loop() {
 
   if (pulse_registered) {
     if (start_ms <= millis()) {
-      char str[30];
-      sprintf(str, "starting at %lu", millis());
-      nh.logwarn(str);
       update_pulses_blocking();
-      sprintf(str, "ending at %lu", millis());
-      nh.logwarn(str);
-    // TODO also check we are supposed to signal pins
     }
     /* else if (start_ms - signal_ms_before <= millis()) {
       nh.logwarn("signalling pins");
