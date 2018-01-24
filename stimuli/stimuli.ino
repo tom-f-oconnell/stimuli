@@ -3,7 +3,8 @@
 // stuff if in a catkin package? how to automatically upload?
 // or at least facilitate switching between ROS / potential non-
 // ROS interface
-// TODO add (maybe target specific) preprocessor definition in catkin / cmake to support this
+// TODO add (maybe target specific) preprocessor definition in catkin / cmake to
+// support this
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -22,14 +23,15 @@
 
 #define MAX_PARAM_NAME_LENGTH 256
 // TODO compare to builtin related to board to validate?
-// TODO maybe just make arbitrarily large and err if used > # actually available on board?
-// or invalid pin #s requested?
+// TODO maybe just make arbitrarily large and err if used > # actually available
+// on board?  or invalid pin #s requested?
 #define MAX_NUM_PINS 12
 #define PIN_NOT_SET -1
 #define NOT_PWM -1
 #define DONE -1
 
-// TODO test all time calculations for millis / micros rollover robustness (could use setMillis(-NNN))
+// TODO test all time calculations for millis / micros rollover robustness
+// (could use setMillis(-NNN))
 // TODO valgrind the output of this + the rosserial code?
 
 ros::NodeHandle nh;
@@ -63,23 +65,29 @@ unsigned char pins_to_signal[MAX_NUM_PINS];
 unsigned long signal_ms_before;
 int odor_signaling_pin;
 
-// TODO TODO warn if loading something that demands more memory than the arduino has
+// TODO TODO warn if loading something that demands more memory than the arduino
+// has
 
-// not using params because it (seems) harder to get a parameter list of dynamic size...
-// not sure why they didn't implement them simiarly, especially considering all param types seem to be contained in
-// std_msgs...
-void load_defaults(const stimuli::LoadDefaultStatesRequest &req, stimuli::LoadDefaultStatesResponse &res) {
+// not using params because it (seems) harder to get a parameter list of dynamic
+// size...
+// not sure why they didn't implement them simiarly, especially considering all
+// param types seem to be contained in std_msgs...
+void load_defaults(const stimuli::LoadDefaultStatesRequest &req, \
+  stimuli::LoadDefaultStatesResponse &res) {
+
   res.receive_time = nh.now();
   nh.loginfo("stimulus arduino receiving defaults...");
   res.request_time = req.header.stamp;
   if (defaults_registered) {
-    // TODO replace with warn so i can control state after that? does error actually exit / do something?
+    // TODO replace with warn so i can control state after that? does error
+    // actually exit / do something?
     nh.logerror("received default pins states while already having defaults");
     return;
   }
   char str[30];
-  // TODO how to set debug flag dynamically from computer? include in service type
-  // since cant seem to reliably nh.getParams before services are negotiated...
+  // TODO how to set debug flag dynamically from computer? include in service
+  // type since cant seem to reliably nh.getParams before services are
+  // negotiated...
   if (debug) {
     nh.loginfo("defaults:");
   }
@@ -103,17 +111,23 @@ void load_defaults(const stimuli::LoadDefaultStatesRequest &req, stimuli::LoadDe
   }
   defaults_registered = true;
 }
-// TODO i'm not limited in the number of ServiceServers I can operate at once on the arduino am i?
-ros::ServiceServer<stimuli::LoadDefaultStatesRequest, stimuli::LoadDefaultStatesResponse> defaults_server("load_defaults", &load_defaults);
+// TODO i'm not limited in the number of ServiceServers I can operate at once on
+// the arduino am i?
+ros::ServiceServer<stimuli::LoadDefaultStatesRequest, \
+  stimuli::LoadDefaultStatesResponse> \
+  defaults_server("load_defaults", &load_defaults);
 
 // TODO arduino fail w/ error is max_num_pins is > what arduino has?
 
 // TODO is it any easier having one node initiate this interaction?
 // make any more sense one way? (right now the python node will be
 // pushing updates)
-// TODO update docs to remove :: and just concatenate? or am i missing something?
-// TODO what does it mean to have the ampersand here? not sure i've seen that...a
-void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSequenceResponse &res) {
+// TODO update docs to remove :: and just concatenate? or am i missing
+// something?
+// TODO what does it mean to have the ampersand here?
+void load_next_sequence(const stimuli::LoadSequenceRequest &req, \
+  stimuli::LoadSequenceResponse &res) {
+
   res.receive_time = nh.now();
   res.request_time = req.header.stamp;
 
@@ -122,7 +136,8 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   }
   clear_pins();
  
-  // TODO TODO TODO does this work or potentially fail (dangling pointer)? need to deep copy or is there easier workaround?
+  // TODO TODO TODO does this work or potentially fail (dangling pointer)? need
+  // to deep copy or is there easier workaround?
   // TODO test
   //seq = req.seq;
 
@@ -134,7 +149,8 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   for (int i=0;i<req.seq.seq_length;i++) {
     sprintf(str, "i %d pin %d", i, req.seq.pins[i]);
     nh.loginfo(str);
-    sprintf(str, "s on %lu off %lu", req.seq.seq[i].s.ms_on, req.seq.seq[i].s.ms_off);
+    sprintf(str, "s on %lu off %lu", req.seq.seq[i].s.ms_on, \
+      req.seq.seq[i].s.ms_off);
     nh.loginfo(str);
   }
   */
@@ -163,7 +179,9 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
     nh.logwarn(str);
     sprintf(str, "rostime_millis_offset %lu", rostime_millis_offset);
     nh.logwarn(str);
-    // TODO TODO i need to get it s.t. start_ms is < millis() here, preferably by a little bit of a margin
+    // TODO TODO i need to get it s.t. start_ms is < millis() here, preferably
+    // by a little bit of a margin
+
     sprintf(str, "start_ms %lu", start_ms);
     nh.logwarn(str);
     sprintf(str, "end_ms %lu", end_ms);
@@ -177,7 +195,8 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   }
   */
 
-  // TODO either guarantee this list is sorted before leaving python or find minimum here
+  // TODO either guarantee this list is sorted before leaving python or find
+  // minimum here
   soonest_ms = to_millis(req.seq.seq[0].t);
   
   stimuli::Transition curr;
@@ -187,8 +206,9 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   unsigned char j = 0;
   for (int i=0;i<req.seq.seq_length;i++) {
     // TODO test
-    // TODO plan to sort python side, but will assert that time was not less than (?) last
-    // but what about wraparound? not a problem i suppose with the 64 bit ros time?
+    // TODO plan to sort python side, but will assert that time was not less
+    // than (?) last but what about wraparound? not a problem i suppose with the
+    // 64 bit ros time?
     if (req.seq.pins[i] != pins[j]) {
       if (j != 0) {
         // will need to set last_state_index for last pin
@@ -213,11 +233,13 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
       // TODO only if pwm?
       // TODO uniform start or set each to first transition time?
       // assume pins already in default states by start?
-      // TODO TODO fix. this makes first s.t meaningless (pins set to next state here)
+      // TODO TODO fix. this makes first s.t meaningless (pins set to next state
+      // here)
       next_time_ms[j] = start_ms;
 
-      // TODO despite sorting in python, this might be nice to the extent i can reuse code
-      // for inevitable sorting for second soonest? use tree / other nice data structure?
+      // TODO despite sorting in python, this might be nice to the extent i can
+      // reuse code for inevitable sorting for second soonest? use tree / other
+      // nice data structure?
       curr_ms = to_millis(curr.t);
       // TODO subtract before comparing
       if (curr_ms < soonest_ms) {
@@ -229,16 +251,19 @@ void load_next_sequence(const stimuli::LoadSequenceRequest &req, stimuli::LoadSe
   last_state_index[j] = req.seq.seq_length;
   soonest_ms = soonest_ms - rostime_millis_offset;
 
-  // TODO  but i supposed the problem with this is that if no states are counted as ~ start above
-  // it is unlikely any will be set in first iteration
+  // TODO  but i supposed the problem with this is that if no states are counted
+  // as ~ start above it is unlikely any will be set in first iteration
   //soonest_ms = start_ms;
   
-  // TODO dynamically allocate? or use some kind of copy constructor and just keep request obj around?
-  // TODO this flag does not prevent callback from overwriting stored LoadSequenceRequest object
-  // (only spinOnce-ing while this flag is true should prevent it, but has problems)
+  // TODO dynamically allocate? or use some kind of copy constructor and just
+  // keep request obj around?
+  // TODO this flag does not prevent callback from overwriting stored
+  // LoadSequenceRequest object (only spinOnce-ing while this flag is true
+  // should prevent it, but has problems)
   pulse_registered = true;
 }
-ros::ServiceServer<stimuli::LoadSequenceRequest, stimuli::LoadSequenceResponse> server("load_seq", &load_next_sequence);
+ros::ServiceServer<stimuli::LoadSequenceRequest, \
+  stimuli::LoadSequenceResponse> server("load_seq", &load_next_sequence);
 
 void reset() {
   noInterrupts();
@@ -253,9 +278,12 @@ void fail(const char *s) {
   reset();
 }
 
-// TODO way to specify OR / sum type for param, since implementation is identical for all 3?
+// TODO way to specify OR / sum type for param, since implementation is
+// identical for all 3?
 // TODO auto required if no default?
-bool get_param(const char* n, int* param, const int* def, bool required = false, int len = 1, int timeout = 1000) {
+bool get_param(const char* n, int* param, const int* def, \
+  bool required = false, int len = 1, int timeout = 1000) {
+
   bool success;
   success = nh.getParam(n, param);
   if (!success) {
@@ -272,7 +300,9 @@ bool get_param(const char* n, int* param, const int* def, bool required = false,
   return true;
 }
 
-bool get_param(const char* n, float* param, const float* def, bool required = false, int len = 1, int timeout = 1000) {
+bool get_param(const char* n, float* param, const float* def, \
+  bool required = false, int len = 1, int timeout = 1000) {
+
   bool success;
   success = nh.getParam(n, param);
   if (!success) {
@@ -289,8 +319,11 @@ bool get_param(const char* n, float* param, const float* def, bool required = fa
   return true;
 }
 
-// TODO how to define default w/ const, while allowing its value to be assigned to param?
-bool get_param(const char *n, char **param, char** def, bool required = false, int len = 1, int timeout = 1000) {
+// TODO how to define default w/ const, while allowing its value to be assigned
+// to param?
+bool get_param(const char *n, char **param, char** def, \
+  bool required = false, int len = 1, int timeout = 1000) {
+
   bool success;
   success = nh.getParam(n, param);
   if (!success) {
@@ -309,23 +342,33 @@ bool get_param(const char *n, char **param, char** def, bool required = false, i
 }
 
 // is this syntax with default args correct?
-bool get_param(const char* n, int* param, bool required = false, int len = 1, int timeout = 1000) {
-  return get_param(n, param, NULL, required = required, len = len, timeout = timeout);
+bool get_param(const char* n, int* param, \
+  bool required = false, int len = 1, int timeout = 1000) {
+
+  return get_param(n, param, NULL, required = required, len = len, \
+    timeout = timeout);
 }
 
-bool get_param(const char* n, float* param, bool required = false, int len = 1, int timeout = 1000) {
-  return get_param(n, param, NULL, required = required, len = len, timeout = timeout);
+bool get_param(const char* n, float* param, \
+  bool required = false, int len = 1, int timeout = 1000) {
+
+  return get_param(n, param, NULL, required = required, len = len, \
+    timeout = timeout);
 }
 
-bool get_param(const char *n, char **param, bool required = false, int len = 1, int timeout = 1000) {
-  return get_param(n, param, NULL, required = required, len = len, timeout = timeout);
+bool get_param(const char *n, char **param, \
+  bool required = false, int len = 1, int timeout = 1000) {
+
+  return get_param(n, param, NULL, required = required, len = len, \
+    timeout = timeout);
 }
 
 // TODO TODO keep trying to get params if any requests are not successful?
 
-// TODO modify these library functions so they can take string or any kind of const char input?
-// what does Serial.print do?
-// TODO check for republishing node or fail (will be missing important parameters)
+// TODO modify these library functions so they can take string or any kind of
+// const char input? what does Serial.print do?
+// TODO check for republishing node or fail (will be missing important
+// parameters)
 bool get_params() {
   bool success;
   int local_debug;
@@ -354,16 +397,20 @@ bool get_params() {
     return false;
   }
   if (their_max > MAX_NUM_PINS) {
-    fail("Arduino can't dynamically allocate pins. Change MAX_NUM_PINS in Arduino code to a higher value");
+    fail("Arduino can't dynamically allocate pins. Change MAX_NUM_PINS "\
+      "in Arduino code to a higher value");
   }
 
-  // TODO way to load them into variable of same name somehow (or compile time macro for it?)?
-  // (so i can operate on a list of param names)
+  // TODO way to load them into variable of same name somehow (or compile time
+  // macro for it?)?  (so i can operate on a list of param names)
   /*
     int default_odor_signaling_pin = PIN_NOT_SET;
-    get_param("olf/odor_signaling_pin", &odor_signaling_pin, &default_odor_signaling_pin);
+    get_param("olf/odor_signaling_pin", &odor_signaling_pin, \
+      &default_odor_signaling_pin);
+
     if (odor_signaling_pin != PIN_NOT_SET) {
-    nh.logwarn("no odor signaling pin set. set the parameter olf/odor_signaling_pin if you'd like to signal to a DAQ");
+    nh.logwarn("no odor signaling pin set. set the parameter"\
+      " olf/odor_signaling_pin if you'd like to signal to a DAQ");
     pinMode(odor_signaling_pin, OUTPUT);
     }
   */
@@ -395,8 +442,8 @@ void clear_pins() {
 
 // TODO maybe dont use delays?
 // get parameters re: signalling from ROS?
-// signal to the data acquisition which olfactometer pin we will pulse for this trial
-// ~2 ms period square wave. # pulses = pin #
+// signal to the data acquisition which olfactometer pin we will pulse for this
+// trial ~2 ms period square wave. # pulses = pin #
 void signal_pin(unsigned char pin) {
   digitalWrite(odor_signaling_pin, LOW);
   delay(1);
@@ -435,6 +482,7 @@ void update_pwm_pinstates() {
       if (next_state[i] != NOT_PWM) {
         // TODO make robust to rollover
         if (next_time_ms[i] <= millis()) {
+          // TODO maybe use port manipulation
           digitalWrite(pins[i], next_state[i]);
   
           // should i increment from previous or from actual time?
@@ -449,24 +497,28 @@ void update_pwm_pinstates() {
         }
       }
     } else {
-      // if we reach an element of pins that is PIN_NOT_SET, no elements after will be set
+      // if we reach an element of pins that is PIN_NOT_SET, no elements after
+      // will be set
       return;
     }
   }
 }
 
-// TODO (fix this) soonest is broken, but as long as i only have one state per sequence, it should work for now
+// TODO (fix this) soonest is broken, but as long as i only have one state per
+// sequence, it should work for now
 // TODO maybe spinOnce occasionally in here?
 void update_pulses_ros() {
   // update pulses with transitions specified explicitly (slower changes)
-  // TODO maybe only check millis periodically here, to update pwm better (or call that multiple times?)
+  // TODO maybe only check millis periodically here, to update pwm better (or
+  // call that multiple times?)
   unsigned long now_ms = millis();
   char str[30];
   // TODO fix rollover
   //sprintf(str, "now %lu", now_ms);
   //nh.loginfo(str);
   
-  // TODO wait, was initial value of soonest off? i thought this loop should be triggered once at beginning?
+  // TODO wait, was initial value of soonest off? i thought this loop should be
+  // triggered once at beginning?
   /*
   if (soonest_ms <= now_ms) {
     for (int i = 0; i < seq.seq_length; i++) {
@@ -474,11 +526,13 @@ void update_pulses_ros() {
       nh.loginfo(str);
       // TODO TODO fix. try to compare durations rather than times... rollover!
       // TODO fix part about states after message redefinition
-      if (next_state_index[i] != DONE && (to_millis(seq.seq[i].states[next_state_index[i]].t) - \
-           rostime_millis_offset) <= now_ms) {
+      if (next_state_index[i] != DONE &&
+      (to_millis(seq.seq[i].states[next_state_index[i]].t) - \
+        rostime_millis_offset) <= now_ms) {
 
-        // TODO not sure this can be trusted (it probably can as long as we can guarantee
-        // callback isn't reached to load another one, which we can, but not spinOnce-ing)
+        // TODO not sure this can be trusted (it probably can as long as we can
+        // guarantee callback isn't reached to load another one, which we can,
+        // but not spinOnce-ing)
         // TODO fix state update
         stimuli::State s = seq.seq[i].states[next_state_index[i]].s;
         sprintf(str, "new state on %lu off %lu", s.ms_on, s.ms_off);
@@ -508,7 +562,8 @@ void update_pulses_ros() {
           next_state_index[i]++;
         } else if (next_state_index[i] == last_state_index[i]) {
           // TODO print when some are done to check length is set correctly
-          // TODO TODO TODO why aren't all being set to done on the first iteration?
+          // TODO TODO TODO why aren't all being set to done on the first
+          // iteration?
           next_state_index[i] = DONE;
           nh.loginfo("done with this pin");
         }
@@ -518,7 +573,8 @@ void update_pulses_ros() {
     nh.logwarn(str);
 
     unsigned long curr_ms;
-    // TODO this will only work if i sort by time in python. will still need to increment index here
+    // TODO this will only work if i sort by time in python. will still need to
+    // increment index here
     // fix
     soonest_ms = to_millis(seq.seq[0].t);
     sprintf(str, "init soonest %lu", soonest_ms);
@@ -526,7 +582,8 @@ void update_pulses_ros() {
     for (int i = 0; i < seq.seq_length; i++) {
       sprintf(str, "i=%d, nsi[i]=%d", i, next_state_index[i]);
       nh.logwarn(str);
-      // TODO check for / fix different wraparound than millis() (? still an issue?)
+      // TODO check for / fix different wraparound than millis() (? still an
+      // issue?)
       if (next_state_index[i] != DONE) {
         // TODO fix given sequence message redefinition
         curr_ms = to_millis(seq.seq[i].states[next_state_index[i]].t);
@@ -539,15 +596,16 @@ void update_pulses_ros() {
         }
       }
     }
-    // TODO TODO need to do the subtraction before comparison to avoid wraparound problems?
+    // TODO TODO need to do the subtraction before comparison to avoid
+    // wraparound problems?
     soonest_ms = soonest_ms - rostime_millis_offset;
     
     sprintf(str, "soonest_ms %lu", soonest_ms);
     nh.loginfo(str);
   }
   */
-  // TODO store minimum time in loop above to avoid need to loop until we are there?
-  // maybe call this multiple times for each of the above?
+  // TODO store minimum time in loop above to avoid need to loop until we are
+  // there?  maybe call this multiple times for each of the above?
   // update pins locked in a specified squarewave until next explicit transition
   update_pwm_pinstates();
 }
@@ -579,8 +637,9 @@ void end_sequence() {
   pulse_registered = false;
 }
 
-// TODO it seems the pulses were a little jittery? why do they appear to jump low briefly?
-// solution?
+// TODO it seems the pulses were a little jittery? why do they appear to jump
+// low briefly?  solution?
+// TODO TODO is the above still an issue?
 void update_pulses_blocking() {
   nh.loginfo("stimulus arduino beginning sequence");
   digitalWrite(LED_BUILTIN, HIGH);
@@ -645,7 +704,8 @@ void loop() {
   //sprintf(str, "before spin %lu", millis());
   //nh.logwarn(str);
   // bounds on how long this will take?
-  // TODO debug compile flags to track distribution of times this takes, w/ emphasis on extreme values?
+  // TODO debug compile flags to track distribution of times this takes, w/
+  // emphasis on extreme values?
   // for reporting...
   // i think for now i'm just going to block while executing the sequence
   nh.spinOnce();
@@ -661,7 +721,7 @@ void loop() {
     }*/
   }
 
-  // TODO why do they always delay?
+  // TODO why do they always delay (in examples)?
   // how to prevent this from limiting my timing precision?
   //delay(10);
 }
