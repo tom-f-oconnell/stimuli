@@ -1,0 +1,3 @@
+[submodule "arduino/libraries/stimuli/test/gtest"]
+	path = arduino/libraries/stimuli/test/gtest
+	url = git@github.com:google/googletest.git

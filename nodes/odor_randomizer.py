@@ -18,11 +18,12 @@ import numpy as np
 
 import sys
 
-# TODO do i ever want to train the same flies on different pairs of odors sequentially?
-# or maybe expose them to some odors / some sequence of odors first (/ after?)?
+# TODO do i ever want to train the same flies on different pairs of odors
+# sequentially?  or maybe expose them to some odors / some sequence of odors
+# first (/ after?)?
 
-# TODO provide a function in this file that stimuli_loader can call
-# and pass a parameter indicating where to find the containing file to stimuli_loader?
+# TODO provide a function in this file that stimuli_loader can call and pass a
+# parameter indicating where to find the containing file to stimuli_loader?
 # then move the node maintenance stuff to there?
 rospy.init_node('stimuli')
 
@@ -42,7 +43,8 @@ odor_panel = {'4-methylcyclohexanol': (-2,),
 # TODO way to load parameter yaml directly? (for testing without ROS running)
 
 reinforced_odor_side_order = rospy.get_param('olf/reinforced_odor_side_order')
-train_one_odor_at_a_time = rospy.get_param('olf/train_one_odor_at_a_time', False)
+train_one_odor_at_a_time = \
+    rospy.get_param('olf/train_one_odor_at_a_time', False)
 
 training_blocks = rospy.get_param('olf/training_blocks')
 prestimulus_delay_s = rospy.get_param('olf/prestimulus_delay_s')
@@ -70,15 +72,18 @@ shock_ms_off = rospy.get_param('zap/shock_ms_off', 1)
 left_shock = rospy.get_param('zap/left')
 right_shock = rospy.get_param('zap/right')
 
-# TODO TODO how to deal w/ symmetry re: sides? (blocks pick a random side to start on?)
+# TODO TODO how to deal w/ symmetry re: sides? (blocks pick a random side to
+# start on?)
 
 # TODO for now, just save sides to a separate file to be loaded by that ROS node
 
 ###############################################################################
 
-daily_connections_filename = '.' + time.strftime('%Y%m%d', time.localtime()) + '_mappings.p'
+daily_connections_filename = '.' + time.strftime('%Y%m%d', time.localtime()) + \
+    '_mappings.p'
 if os.path.isfile(daily_connections_filename):
-    c = raw_input('Found saved mappings from today. Load them? ([y]es/[n]o/[d]elete them.')
+    c = raw_input('Found saved mappings from today. Load them? ' + \
+        '([y]es/[n]o/[d]elete them.')
     if c.lower() == 'y':
         rospy.loginfo('loading odors and odor->pin mappings from ' + \
             daily_connections_filename)
@@ -119,8 +124,9 @@ if generate:
     # TODO improve
     if len(odors) > 1:
         with open(daily_connections_filename, 'wb') as f:
-            rospy.loginfo('temporarily saving odors and odor->pin mappings to ' + \
-                daily_connections_filename + ', for reuse in other experiments today.')
+            rospy.loginfo('temporarily saving odors and odor->pin mappings ' + \
+                'to ' + daily_connections_filename + ', for reuse in other ' + \
+                'experiments today.')
             pickle.dump([odors, left_pins, right_pins], f)
             # TODO verify it saved correctly?
 
@@ -175,8 +181,8 @@ class StimuliGenerator:
     # i'd like to have a function here, so i could call it both in a __main__
     # and from my testing functions
     def __init__(self):
-        # TODO switch everything over to milliseconds relative to start? provide the option?
-        # or Durations? or zero time here somehow?
+        # TODO switch everything over to milliseconds relative to start? provide
+        # the option?  or Durations? or zero time here somehow?
         self.current_t0 = rospy.Time.now()
 
         # only do this for 'alternating' mode?
@@ -187,8 +193,9 @@ class StimuliGenerator:
         """
         TODO
         """
-        # setting ms_on to 1 to emphasize duration is determined by end time set of the Sequence
-        # and the pin will go low if that is the DefaultState for the pin
+        # setting ms_on to 1 to emphasize duration is determined by end time set
+        # of the Sequence and the pin will go low if that is the DefaultState
+        # for the pin
         high = State(ms_on=1, ms_off=0)
         # don't need explicit low transition because default state is low
         # but end time in Sequence message must be set correctly
@@ -206,7 +213,8 @@ class StimuliGenerator:
                 balance_transition = [Transition(self.current_t0, low)]
 
             for p in balance_pins:
-                # TODO won't this len always be 1? is this a bug? why did i do it this way?
+                # TODO won't this len always be 1? is this a bug? why did i do
+                # it this way?
                 expanded_pins.extend(len(balance_transition) * [p])
                 seq.extend(balance_transition)
 
@@ -214,19 +222,23 @@ class StimuliGenerator:
         if train and train_one_odor_at_a_time:
             # TODO probably rename this flag to indicate its use here as well?
             if self.current_side_is_left:
-                pins = [odors2left_pins[reinforced], odors2right_pins[reinforced]]
+                pins = [odors2left_pins[reinforced], \
+                    odors2right_pins[reinforced]]
             else:
-                pins = [odors2left_pins[unreinforced], odors2right_pins[unreinforced]]
+                pins = [odors2left_pins[unreinforced], \
+                    odors2right_pins[unreinforced]]
 
         else:
             if self.current_side_is_left:
                 if not unreinforced is None:
-                    pins = [odors2left_pins[reinforced], odors2right_pins[unreinforced]]
+                    pins = [odors2left_pins[reinforced], \
+                        odors2right_pins[unreinforced]]
                 else:
                     pins = [odors2left_pins[reinforced]]
             else:
                 if not unreinforced is None:
-                    pins = [odors2left_pins[unreinforced], odors2right_pins[reinforced]]
+                    pins = [odors2left_pins[unreinforced], \
+                        odors2right_pins[reinforced]]
                 else:
                     pins = [odors2right_pins[reinforced]]
 
@@ -341,14 +353,15 @@ if separate_balances:
 default_states = [DefaultState(p, True) for p in set(high_pins)] + \
                  [DefaultState(p, False) for p in set(low_pins)]
 
-# TODO make sure this node stays alive until the current_t0 after the trial structure has been
-# evaluated
+# TODO make sure this node stays alive until the current_t0 after the trial
+# structure has been evaluated
 
 ###############################################################################
 
 # can i do this from outside of a node?
-rospy.loginfo('Stimuli should finish at ' + datetime.datetime.fromtimestamp(gen.current_t0.to_sec()\
-        ).strftime('%Y-%m-%d %H:%M:%S'))
+rospy.loginfo('Stimuli should finish at ' + \
+    datetime.datetime.fromtimestamp(gen.current_t0.to_sec()).strftime(\
+    '%Y-%m-%d %H:%M:%S'))
 rospy.loginfo(str(gen.current_t0.to_sec() - t0_sec) + ' seconds')
 
 output_base_dir = '.'
@@ -356,11 +369,15 @@ output_base_dir = '.'
 # TODO test this
 if save_stimulus_info:
     # TODO get rid of multi_tracker prefix
-    experiment_basename = rospy.get_param('multi_tracker/experiment_basename', None)
+    experiment_basename = \
+        rospy.get_param('multi_tracker/experiment_basename', None)
+
     if experiment_basename is None:
         # TODO fix node number thing
-        experiment_basename = time.strftime('%Y%m%d_%H%M%S_N1', time.localtime())
-        rospy.set_param('multi_tracker/experiment_basename', experiment_basename)
+        experiment_basename = \
+            time.strftime('%Y%m%d_%H%M%S_N1', time.localtime())
+        rospy.set_param('multi_tracker/experiment_basename', \
+            experiment_basename)
 
     output_dir = os.path.join(output_base_dir, experiment_basename)
     filename = os.path.join(output_dir, experiment_basename + '_stimuli.p')
@@ -372,9 +389,12 @@ if save_stimulus_info:
 
     # TODO check / test success
     with open(filename, 'wb') as f:
-        pickle.dump((odors2left_pins, odors2right_pins, default_states, trial_structure), f)
+        pickle.dump((odors2left_pins, odors2right_pins, default_states, \
+            trial_structure), f)
 else:
-    rospy.logwarn('Not saving generated trial structure / pin to odor mappings!')
+    rospy.logwarn('Not saving generated trial structure ' + \
+        '/ pin to odor mappings!')
 
-stimuli_loader = StimuliLoader(default_states, trial_structure, epoch_labels=epoch_labels)
+stimuli_loader = StimuliLoader(default_states, trial_structure, \
+    epoch_labels=epoch_labels)
 

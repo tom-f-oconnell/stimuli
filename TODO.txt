@@ -1,8 +1,22 @@
--might make sense to move one of the configs from the choice repo (for odor_randomizer) to this repo, at least as an example, if not to also serve as the parameter file actually invoked by the choice code.
+-might make sense to move one of the configs from the choice repo (for
+ odor_randomizer) to this repo, at least as an example, if not to also serve as
+ the parameter file actually invoked by the choice code.
 
-use a service / another flag in return of defaults to only proceed with callbacks after
-parameters are all set?
+use a service / another flag in return of defaults to only proceed with
+callbacks after parameters are all set?
 
 POWER CYCLING ARDUINO SEEMS LIKE IT MIGHT NOT RESET VALVES NOW (it should)
 is this an electronics issue w/ Wilson lab MOSFET driver? mechanism, otherwise?
 my imagination?
+
+remove any dependencies on ROS? (for use on Windows, etc)
+-provide alternate computer-side (python?) interface for setting configuration
+
+-configurable support for diff kinds of triggers of pulse trains (high/low
+ transitions, etc)? (for timing w/ external hardware)
+ -gate input (idea from cyclops stimulator) & maybe otherwise just execute
+  config continuously?
+
+-utility to convert from pulsepal config format(s) to a config suitable here?
+-likewise for "Presentation" description formats
+

@@ -32,9 +32,21 @@ job of arduino:
 	-or report error
 -toggle correct pins in order (to <=1ms precision?)
 -reset back to waiting condition after finishing pulse train
--TODO how to handle integer signalling (to maintain compatiblility w/ old setup, etc)
+-TODO how to handle integer signalling (to maintain compatiblility w/ old setup,
+ etc)
 	-specify time buffer between signal and start of pulse?
 
--publish a topic / otherwise indicate failure that does not happen while processing request
+-publish a topic / otherwise indicate failure that does not happen while
+ processing request
 
 -performance characteristics of service requests through rosserial?
+
+
+20180123
+need to add support for multishock library / shock delivery + measurement
+hardware
+
+-i forget. publishing doesn't need to wait for nh.spinOnce(), right? in that
+ case, maybe it won't be so hard to at least send messages back during current
+ blocking stimulus delivery sequences
+

@@ -1,0 +1,35 @@
+
+-automation to checkout submodule as necessary
+
+-enable_testing? what is it doing? should I be calling main / explicitly linking
+ against gtest main like in google instructions?
+ -automation to run tests (that is the whole point of this cmake file, right?).
+  unless I also let it build / upload for Arduino, but I don't know if that's
+  the point. would I need to ship w/ avr or arduino libraries then, or just 
+  install toolchains or something? (which I'd need to do for upload anyway...)
+ -is there cmake test syntax to register all gtest tests at once, rather than
+  having to add_test(...) each of them?
+
+-python tests for example unpacking of data on host side (if just directly
+ writing it, after measure(X)/measure() calls)
+ -what is generally done with those in a setup.py? don't know if i'll have a 
+  module though... maybe. otherwise just include tests in cmake?
+
+-break test fixture / state i want to share w/ static tests into it's own file
+ -.hpp? worth .hpp + .cpp, for one class?
+
+-test static variable states are set correctly by *importing the cpp file* in 
+ another cpp file defining static variable tests.
+ -I don't really think testing those states is bad, because that is one part of
+  the interface.
+ -I might consider less hacky ways of doing it though... (of making a "seam")
+
+-lcov / other (maybe online w/ Github meter?) coverage reports
+
+-continuous integration (Travis CI, follow guide)
+
+-even more aggressive compiler flags?
+-try linters on code? automatic linters / bug finders?
+
+-include as a kind of integration test, that everything at least compiles in the
+ Arduino environment
