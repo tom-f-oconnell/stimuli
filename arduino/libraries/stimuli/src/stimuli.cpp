@@ -28,6 +28,9 @@ namespace stim {
     // TODO maybe just make arbitrarily large and err if used > # actually
     // available on board?  or invalid pin #s requested?
     const static uint8_t max_num_pins = 12;
+    const static uint8_t max_num_function_pairs = 1;
+    // TODO put in init_state
+    const static uint8_t no_function = 0;
     // TODO make sure 8 bits is big enough for all. pin_not_set? (125?)
     const static int8_t pin_not_set = -1;
     // TODO order of modifiers?
@@ -48,6 +51,7 @@ namespace stim {
     // TODO is this ever correctly set?? test!
     //stimuli::Sequence seq;
 
+    // TODO fixed width types
     unsigned long start_ms;
     unsigned long end_ms;
     unsigned long rostime_millis_offset;
@@ -57,6 +61,7 @@ namespace stim {
     char pins[max_num_pins];
     char pins_for_default[max_num_pins];
     // TODO maybe make char for consistency?
+    // TODO are these all still used?
     unsigned char default_state[max_num_pins];
     unsigned int next_state_index[max_num_pins];
     unsigned int last_state_index[max_num_pins];
@@ -68,6 +73,9 @@ namespace stim {
     unsigned char pins_to_signal[max_num_pins];
     unsigned long signal_ms_before;
     int odor_signaling_pin;
+
+    char * function_pair_ids[max_num_function_pairs];
+    func_pair function_pairs[max_num_function_pairs];
 
     // TODO TODO warn if loading something that demands more memory than the
     // arduino has
@@ -100,7 +108,7 @@ namespace stim {
       if (req.defaults_length > max_num_pins) {
         fail("Trying to set defaults for more pins than available.");
       }
-      for (int i = 0; i < req.defaults_length; i++) {
+      for (int i=0; i < req.defaults_length; i++) {
         pins_for_default[i] = req.defaults[i].pin;
         pinMode(pins_for_default[i], OUTPUT);
         if (req.defaults[i].high) {
@@ -162,7 +170,7 @@ namespace stim {
 
       // TODO TODO maybe this should not be sent separately? (just a flag
       // parameter)
-      for (int i = 0; i < req.pins_to_signal_length; i++) {
+      for (int i=0; i < req.pins_to_signal_length; i++) {
         pins_to_signal[i] = req.pins_to_signal[i];
       }
 
@@ -272,6 +280,10 @@ namespace stim {
     }
     ros::ServiceServer<stimuli::LoadSequenceRequest, \
       stimuli::LoadSequenceResponse> server("load_seq", &load_next_sequence);
+
+    void register_function_pair(char * id, void (*f_on)(), void (*f_off)()) {
+        
+    }
 
     void reset() {
       noInterrupts();
@@ -426,14 +438,19 @@ namespace stim {
       return success;
     }
 
-    void init_state() {
-      for (int i = 0; i < max_num_pins; i++) {
+    static inline void init_state() {
+      for (int i=0; i<max_num_pins; i++) {
         pins_for_default[i] = pin_not_set;
         pins[i] = pin_not_set;
         pins_to_signal[i] = pin_not_set;
         // next_time_ms elements are undefined unless next_state is not this
         // value
         next_state[i] = not_pwm;
+      }
+      for (int i=0; i<max_num_function_pairs; i++) {
+        function_pair_ids[i] = "";
+        function_pairs[i].f_on = no_function;
+        function_pairs[i].f_off = no_function;
       }
       defaults_registered = false;
       pulse_registered = false;
@@ -442,8 +459,8 @@ namespace stim {
     }
 
     // TODO consolidate w/ init_state? move some of that here?
-    void clear_pins() {
-      for (int i = 0; i < max_num_pins; i++) {
+    static inline void clear_pins() {
+      for (int i=0; i<max_num_pins; i++) {
         pins[i] = pin_not_set;
         pins_to_signal[i] = pin_not_set;
       }
@@ -453,7 +470,7 @@ namespace stim {
     // get parameters re: signalling from ROS?
     // signal to the data acquisition which olfactometer pin we will pulse for
     // this trial ~2 ms period square wave. # pulses = pin #
-    void signal_pin(unsigned char pin) {
+    static inline void signal_pin(unsigned char pin) {
       digitalWrite(odor_signaling_pin, LOW);
       delay(1);
       while (pin > 0) {
@@ -466,27 +483,26 @@ namespace stim {
       delay(10);
     }
 
-    void signal_pins() {
-      for (int i = 0; i < max_num_pins; i++) {
+    static inline void signal_pins() {
+      for (int i=0; i<max_num_pins; i++) {
         if (pins_to_signal[i] != pin_not_set) {
           signal_pin(pins_to_signal[i]);
         }
       }
     }
 
-
     // TODO unit test
-    unsigned long to_millis(ros::Time t) {
+    static inline unsigned long to_millis(ros::Time t) {
       return (unsigned long) (t.sec * 1000ull + t.nsec / 1000000ull);
     }
 
-    unsigned long to_micros(ros::Time t) {
+    static inline unsigned long to_micros(ros::Time t) {
       // TODO fix + test
       return (unsigned long) (t.sec * 1000000ull + t.nsec / 1000ull);
     }
 
-    void update_pwm_pinstates() {
-      for (int i = 0; i < max_num_pins; i++) {
+    static inline void update_pwm_pinstates() {
+      for (int i=0; i<max_num_pins; i++) {
         if (pins[i] != pin_not_set) {
           if (next_state[i] != not_pwm) {
             // TODO make robust to rollover
@@ -516,12 +532,12 @@ namespace stim {
     // TODO (fix this) soonest is broken, but as long as i only have one state
     // per sequence, it should work for now
     // TODO maybe spinOnce occasionally in here?
-    void update_pulses_ros() {
+    static inline void update_pulses_ros() {
       // update pulses with transitions specified explicitly (slower changes)
       // TODO maybe only check millis periodically here, to update pwm better
       // (or call that multiple times?)
-      unsigned long now_ms = millis();
-      char str[30];
+      //unsigned long now_ms = millis();
+      //char str[30];
       // TODO fix rollover
       //sprintf(str, "now %lu", now_ms);
       //nh.loginfo(str);
@@ -531,7 +547,7 @@ namespace stim {
       // triggered once at beginning?
       /*
       if (soonest_ms <= now_ms) {
-        for (int i = 0; i < seq.seq_length; i++) {
+        for (int i=0; i < seq.seq_length; i++) {
           sprintf(str, "p %d done %d", pins[i], next_state_index[i]);
           nh.loginfo(str);
           // TODO TODO fix. try to compare durations rather than times...
@@ -590,7 +606,7 @@ namespace stim {
         soonest_ms = to_millis(seq.seq[0].t);
         sprintf(str, "init soonest %lu", soonest_ms);
         nh.logwarn(str);
-        for (int i = 0; i < seq.seq_length; i++) {
+        for (int i=0; i < seq.seq_length; i++) {
           sprintf(str, "i=%d, nsi[i]=%d", i, next_state_index[i]);
           nh.logwarn(str);
           // TODO check for / fix different wraparound than millis() (? still an
@@ -623,10 +639,10 @@ namespace stim {
     }
 
 
-    // TODO consolidate this code w/ similar in loops?
-    void set_non_pwm_pins() {
+    /* Sets pins that have the same state for the duration of a sequence. */
+    static inline void set_non_pwm_pins() {
       // TODO need to do anything with soonest?
-      for (int i = 0; i < max_num_pins; i++) {
+      for (int i=0; i<max_num_pins; i++) {
         if (pins[i] != pin_not_set && next_state[i] == not_pwm) {
           if (ms_on[i] == 0) {
             // TODO port manipulations
@@ -638,9 +654,9 @@ namespace stim {
       }
     }
 
-    void end_sequence() {
+    static inline void end_sequence() {
       // TODO add debug prints
-      for (int i = 0; i < max_num_pins; i++) {
+      for (int i=0; i<max_num_pins; i++) {
         if (pins_for_default[i] != pin_not_set) {
           digitalWrite(pins_for_default[i], default_state[i]);
         } else {
@@ -653,27 +669,17 @@ namespace stim {
     // TODO it seems the pulses were a little jittery? why do they appear to
     // jump low briefly?  solution?
     // TODO TODO is the above still an issue?
-    void update_pulses_blocking() {
+    static inline void update_pulses_blocking() {
       nh.loginfo("stimulus arduino beginning sequence");
       digitalWrite(LED_BUILTIN, HIGH);
-      // TODO delete me
-      /*
-      digitalWrite(61, HIGH);
-      digitalWrite(60, HIGH);
-      digitalWrite(6, HIGH);
-      */
-      //
-      //shouldn't be used if if in update_pulses_ros is triggered once
       set_non_pwm_pins();
-      while (millis() < end_ms) {
+      while (millis() <= end_ms) {
       // while (micros() < end_us) {
-        // TODO uncomment me
         update_pulses_ros();
       }
       end_sequence();
       digitalWrite(LED_BUILTIN, LOW);
       nh.loginfo("stimulus arduino finished sequence");
-      // TODO how to not lose sync with rosserial_python?
     }
 
     // TODO change things named pulse_XXX to sequence_XXX
@@ -712,14 +718,14 @@ namespace stim {
       nh.loginfo("stimulus arduino done setup.");
     }
     
+    // worth an inline declaration? would need to declare in header / extern?
     void update() {
       //char str[30];
       //sprintf(str, "before spin %lu", millis());
       //nh.logwarn(str);
       // bounds on how long this will take?
       // TODO debug compile flags to track distribution of times this takes, w/
-      // emphasis on extreme values?
-      // for reporting...
+      // emphasis on extreme values? for reporting.
       // i think for now i'm just going to block while executing the sequence
       nh.spinOnce();
 
@@ -733,9 +739,5 @@ namespace stim {
           nh.logwarn("done with that");
         }*/
       }
-
-      // TODO why do they always delay (in examples)?
-      // how to prevent this from limiting my timing precision?
-      //delay(10);
     }
 }

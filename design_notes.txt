@@ -49,4 +49,6 @@ hardware
 -i forget. publishing doesn't need to wait for nh.spinOnce(), right? in that
  case, maybe it won't be so hard to at least send messages back during current
  blocking stimulus delivery sequences
-
+-i suppose what I really want is to be able to define and call user-defined
+ functions by *name*, rather than by some index, but it seems hard to do that
+ without piggybacking off of separate service calls or something...
