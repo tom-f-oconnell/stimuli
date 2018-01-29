@@ -1,5 +1,5 @@
 
-// TODO include appropriate generated type stuff
+#include <ros.h>
 
 // TODO careful not to double namespace, if macro used w/in
 // gets a string identifier for the function pair
@@ -61,6 +61,8 @@ namespace stim {
     void init();
     void update();
 
+    ros::NodeHandle * get_nodehandle();
+
     void register_function_pair(char * id, func_ptr f_on, func_ptr f_off);
-    //uint16_t do_while_waiting();
+    void while_idle(func_ptr f);
 }

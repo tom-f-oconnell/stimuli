@@ -57,6 +57,8 @@ namespace stim {
     unsigned long rostime_millis_offset;
     unsigned long soonest_ms;
 
+    func_ptr while_idle_fn;
+
     // TODO make sure all printf specifiers are appropriate
     char pins[max_num_pins];
     char pins_for_default[max_num_pins];
@@ -456,6 +458,8 @@ namespace stim {
       pulse_registered = false;
       // TODO TODO set via parameter
       signal_ms_before = 500;
+
+      while_idle_fn = no_function;
     }
 
     // TODO consolidate w/ init_state? move some of that here?
@@ -676,6 +680,9 @@ namespace stim {
       while (millis() <= end_ms) {
       // while (micros() < end_us) {
         update_pulses_ros();
+        if (while_idle_fn != no_function) {
+          while_idle_fn();
+        }
       }
       end_sequence();
       digitalWrite(LED_BUILTIN, LOW);
@@ -739,5 +746,13 @@ namespace stim {
           nh.logwarn("done with that");
         }*/
       }
+    }
+
+    ros::NodeHandle get_nodehandle() {
+        return &nh;
+    }
+
+    void while_idle(func_ptr f) {
+        while_idle_fn = f;
     }
 }
