@@ -7,9 +7,9 @@
 // support this
 
 #if defined(ARDUINO) && ARDUINO >= 100
-#include "Arduino.h"
+    #include "Arduino.h"
 #else
-#include <WProgram.h>
+    #include <WProgram.h>
 #endif
 
 // TODO include appropriate types header
@@ -18,17 +18,15 @@
 #include <ros.h>
 // what happens if this isn't included?
 #include <ros/time.h>
+
 #include <stimuli/LoadDefaultStates.h>
 #include <stimuli/LoadSequence.h>
 #include <stimuli/TestTransportLoadDefaultStatesReq.h>
 #include <stimuli/TestTransportLoadSequenceReq.h>
 
+#include "stimuli.hpp"
+
 namespace stim {
-    // TODO compare to builtin related to board to validate?
-    // TODO maybe just make arbitrarily large and err if used > # actually
-    // available on board?  or invalid pin #s requested?
-    const static uint8_t max_num_pins = 12;
-    const static uint8_t max_num_function_pairs = 1;
     // TODO put in init_state
     const static uint8_t no_function = 0;
     // TODO make sure 8 bits is big enough for all. pin_not_set? (125?)
@@ -79,9 +77,39 @@ namespace stim {
     char * function_pair_ids[max_num_function_pairs];
     func_pair function_pairs[max_num_function_pairs];
 
-    // TODO TODO warn if loading something that demands more memory than the
-    // arduino has
+    void reset() {
+      noInterrupts();
+      wdt_enable(WDTO_8S);
+      interrupts();
+      // TODO delay?
+    }
 
+    void fail(const char *s) {
+      // TODO careful... might never get to the next line
+      nh.logerror(s);
+      reset();
+    }
+
+    // TODO consolidate w/ init_state? move some of that here?
+    static inline void clear_pins() {
+      for (int i=0; i<max_num_pins; i++) {
+        pins[i] = pin_not_set;
+        pins_to_signal[i] = pin_not_set;
+      }
+    }
+
+    // TODO unit test
+    static inline unsigned long to_millis(ros::Time t) {
+      return (unsigned long) (t.sec * 1000ull + t.nsec / 1000000ull);
+    }
+
+    static inline unsigned long to_micros(ros::Time t) {
+      // TODO fix + test
+      return (unsigned long) (t.sec * 1000000ull + t.nsec / 1000ull);
+    }
+
+    // TODO TODO warn if loading something that demands more memory than the
+    // arduino has?
     // not using params because it (seems) harder to get a parameter list of
     // dynamic size...  not sure why they didn't implement them simiarly,
     // especially considering all param types seem to be contained in
@@ -284,20 +312,7 @@ namespace stim {
       stimuli::LoadSequenceResponse> server("load_seq", &load_next_sequence);
 
     void register_function_pair(char * id, void (*f_on)(), void (*f_off)()) {
-        
-    }
-
-    void reset() {
-      noInterrupts();
-      wdt_enable(WDTO_8S);
-      interrupts();
-      // TODO delay?
-    }
-
-    void fail(const char *s) {
-      // TODO careful... might never get to the next line
-      nh.logerror(s);
-      reset();
+        // TODO
     }
 
     // TODO way to specify OR / sum type for param, since implementation is
@@ -462,14 +477,6 @@ namespace stim {
       while_idle_fn = no_function;
     }
 
-    // TODO consolidate w/ init_state? move some of that here?
-    static inline void clear_pins() {
-      for (int i=0; i<max_num_pins; i++) {
-        pins[i] = pin_not_set;
-        pins_to_signal[i] = pin_not_set;
-      }
-    }
-
     // TODO maybe dont use delays?
     // get parameters re: signalling from ROS?
     // signal to the data acquisition which olfactometer pin we will pulse for
@@ -493,16 +500,6 @@ namespace stim {
           signal_pin(pins_to_signal[i]);
         }
       }
-    }
-
-    // TODO unit test
-    static inline unsigned long to_millis(ros::Time t) {
-      return (unsigned long) (t.sec * 1000ull + t.nsec / 1000000ull);
-    }
-
-    static inline unsigned long to_micros(ros::Time t) {
-      // TODO fix + test
-      return (unsigned long) (t.sec * 1000000ull + t.nsec / 1000ull);
     }
 
     static inline void update_pwm_pinstates() {
@@ -748,7 +745,7 @@ namespace stim {
       }
     }
 
-    ros::NodeHandle get_nodehandle() {
+    ros::NodeHandle * get_nodehandle() {
         return &nh;
     }
 

@@ -1,5 +1,22 @@
 
+#ifndef STIMULI_HPP
+#define STIMULI_HPP
+
+#if defined(ARDUINO)
+    #if ARDUINO >= 100
+        #include <Arduino.h>
+    #else
+        #include <WProgram.h>
+    #endif
+#elif defined(UNIT_TESTING)
+    #include <stdint.h>
+#endif
+
 #include <ros.h>
+#include <stimuli/LoadDefaultStates.h>
+#include <stimuli/LoadSequence.h>
+#include <stimuli/TestTransportLoadDefaultStatesReq.h>
+#include <stimuli/TestTransportLoadSequenceReq.h>
 
 // TODO careful not to double namespace, if macro used w/in
 // gets a string identifier for the function pair
@@ -13,9 +30,13 @@ namespace stim {
     struct func_pair {
         func_ptr f_on;
         func_ptr f_off;
-    }
+    };
 
+    // TODO compare to builtin related to board to validate?
+    // TODO maybe just make arbitrarily large and err if used > # actually
+    // available on board?  or invalid pin #s requested?
     const uint8_t max_num_pins = 12;
+    const uint8_t max_num_function_pairs = 1;
 
     void load_next_sequence(const stimuli::LoadSequenceRequest &req, \
       stimuli::LoadSequenceResponse &res);
@@ -66,3 +87,4 @@ namespace stim {
     void register_function_pair(char * id, func_ptr f_on, func_ptr f_off);
     void while_idle(func_ptr f);
 }
+#endif

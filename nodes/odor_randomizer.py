@@ -69,8 +69,10 @@ balance_normally_flowing = rospy.get_param('olf/balance_normally_flowing', True)
 shock_ms_on = rospy.get_param('zap/shock_ms_on', 0)
 shock_ms_off = rospy.get_param('zap/shock_ms_off', 1)
 
-left_shock = rospy.get_param('zap/left')
-right_shock = rospy.get_param('zap/right')
+# TODO handle both?
+#left_shock = rospy.get_param('zap/left')
+#right_shock = rospy.get_param('zap/right')
+all_shock = rospy.get_param('zap/all_pin')
 
 # TODO TODO how to deal w/ symmetry re: sides? (blocks pick a random side to
 # start on?)
@@ -261,11 +263,13 @@ class StimuliGenerator:
         # TODO check this part
         if train_one_odor_at_a_time:
             if self.current_side_is_left:
-                return [left_shock, right_shock], [transition, transition]
+                return [all_shock], [transition, transition]
             else:
                 return [], []
 
         else:
+            # TODO fail if using all_shock
+            raise NotImplementedError('hardcoding zap/all_shock in config now')
             # TODO add support (w/ parameter?) for shocking both sides?
             if self.current_side_is_left:
                 return [left_shock], [transition]

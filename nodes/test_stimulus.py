@@ -15,8 +15,10 @@ class TestStimLoader:
         sequence_service_name = 'load_seq'
         rospy.wait_for_service(defaults_service_name)
         rospy.wait_for_service(sequence_service_name)
-        load_defaults = rospy.ServiceProxy(defaults_service_name, LoadDefaultStates)
-        load_next_sequence = rospy.ServiceProxy(sequence_service_name, LoadSequence)
+        load_defaults = rospy.ServiceProxy(defaults_service_name, \
+            LoadDefaultStates)
+        load_next_sequence = rospy.ServiceProxy(sequence_service_name, \
+            LoadSequence)
 
         # to allow arduino to get parameters before services are called
         # (so that debug flag can be in effect during services)
@@ -35,7 +37,8 @@ class TestStimLoader:
             pins.append(balance)
 
             # all the valves should have their control pins LOW by default (0v)
-            balance_normally_flowing = rospy.get_param('olf/balance_normally_flowing', True)
+            balance_normally_flowing = \
+                rospy.get_param('olf/balance_normally_flowing', True)
 
         default_states = [DefaultState(p, False) for p in pins]
 
@@ -71,12 +74,21 @@ class TestStimLoader:
                     rospy.Duration.from_sec(ms_on / 1000), s=low)]
 
             transitions.append(balance_transition)
-            rospy.loginfo('balance on pin {} ({})'.format(balance, pin2name[balance]))
+            if balance in pin2name:
+                rospy.loginfo('balance on pin {} ({})'.format(balance, \
+                    pin2name[balance]))
+            else:
+                rospy.loginfo('balance on pin {}'.format(balance))
 
         seq = Sequence(start=start, end=end, pins=pins, seq=transitions)
-        this_pin_high = LoadSequenceRequest(header=h, seq=seq, pins_to_signal=[])
+        this_pin_high = LoadSequenceRequest(header=h, seq=seq, \
+            pins_to_signal=[])
 
-        rospy.loginfo('odor on pin {} ({})'.format(odor, pin2name[odor]))
+        if odor in pin2name:
+            rospy.loginfo('odor on pin {} ({})'.format(odor, pin2name[odor]))
+        else:
+            rospy.loginfo('odor on pin {}'.format(odor))
+
         try:
             resp = load_next_sequence(this_pin_high)
         except rospy.ServiceException as exc:
