@@ -112,10 +112,10 @@ if generate:
     #odors = list(odor_panel)
     # TODO put in config file
     mock = ('paraffin (mock)', 0)
-    #odors = [('4-methylcyclohexanol', -2), ('3-octanol', -2)]
-    odors = rospy.get_param('olf/odors', ['UNSPECIFIED_ODOR'])
+    odors = [('4-methylcyclohexanol', -2), ('3-octanol', -2)]
+    #odors = rospy.get_param('olf/odors', ['UNSPECIFIED_ODOR'])
     # TODO fix
-    odors = list(map(lambda x: (x, np.nan), odors))
+    #odors = list(map(lambda x: (x, np.nan), odors))
     #odors.append(mock)
 
     print(odors, len(odors), left_pins)
@@ -160,7 +160,7 @@ else:
     # TODO rename
     reinforced, unreinforced = random.sample(odors, 2)
 
-if len(odors) > 1 and train_blocks != 0:
+if len(odors) > 1 and training_blocks != 0:
     rospy.loginfo('pairing shock with '  + str(reinforced))
     rospy.loginfo('unpaired ' + str(unreinforced))
 
@@ -346,7 +346,8 @@ rospy.logdebug('trial_structure', trial_structure)
 # low_pins = pins that default to low (0v)
 # high_pins = pins that default to high (5v)
 # pins should be in the default state during the intertrial interval
-low_pins = left_pins + right_pins + [left_shock, right_shock]
+#low_pins = left_pins + right_pins + [left_shock, right_shock]
+low_pins = left_pins + right_pins + [all_shock]
 high_pins = []
 if separate_balances:
     if balance_normally_flowing:
