@@ -66,6 +66,9 @@ if separate_balances and (left_balance is None or right_balance is None):
 
 balance_normally_flowing = rospy.get_param('olf/balance_normally_flowing', True)
 
+odor_pulse_ms = rospy.get_param('olf/odor_pulse_ms')
+post_pulse_ms = rospy.get_param('olf/post_pulse_ms')
+
 shock_ms_on = rospy.get_param('zap/shock_ms_on', 0)
 shock_ms_off = rospy.get_param('zap/shock_ms_off', 1)
 
@@ -198,10 +201,10 @@ class StimuliGenerator:
         # setting ms_on to 1 to emphasize duration is determined by end time set
         # of the Sequence and the pin will go low if that is the DefaultState
         # for the pin
-        high = State(ms_on=1, ms_off=0)
+        odor_pulse = State(ms_on=odor_pulse_ms, ms_off=post_pulse_ms)
         # don't need explicit low transition because default state is low
         # but end time in Sequence message must be set correctly
-        transition = [Transition(self.current_t0, high)]
+        transition = [Transition(self.current_t0, odor_pulse)]
 
         expanded_pins = []
         seq = []
@@ -211,8 +214,11 @@ class StimuliGenerator:
             if balance_normally_flowing:
                 balance_transition = transition
             else:
-                low = State(ms_on=0, ms_off=1)
-                balance_transition = [Transition(self.current_t0, low)]
+                # TODO TODO fix. needs to be complement of odor_pulse, at all
+                # times
+                raise NotImplementedError
+                #balance_transition = [Transition(self.current_t0 + \
+                #    rospy.Duration(odor_pulse_ms / 1000.0), )]
 
             for p in balance_pins:
                 # TODO won't this len always be 1? is this a bug? why did i do
