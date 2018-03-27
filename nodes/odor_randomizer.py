@@ -6,17 +6,17 @@ import random
 import datetime
 import time
 import os
+import sys
 import pickle
 
+import numpy as np
 import rospy
 from std_msgs.msg import Header
+
 from stimuli.msg import Sequence, Transition, State, DefaultState
 from stimuli.srv import LoadSequenceRequest
 from stimuli_loader import StimuliLoader
 
-import numpy as np
-
-import sys
 
 # TODO do i ever want to train the same flies on different pairs of odors
 # sequentially?  or maybe expose them to some odors / some sequence of odors
@@ -379,7 +379,9 @@ output_base_dir = '.'
 
 # TODO test this
 if save_stimulus_info:
-    # TODO get rid of multi_tracker prefix
+    # TODO get rid of multi_tracker prefix? implement way of managing experiment
+    # ids / data output in metatools (though the latter might need to be done in
+    # each package generating data?)?
     experiment_basename = \
         rospy.get_param('multi_tracker/experiment_basename', None)
 
@@ -390,6 +392,7 @@ if save_stimulus_info:
         rospy.set_param('multi_tracker/experiment_basename', \
             experiment_basename)
 
+    # TODO do i want to save this if this program is Ctrl-C'd? probably?
     output_dir = os.path.join(output_base_dir, experiment_basename)
     filename = os.path.join(output_dir, experiment_basename + '_stimuli.p')
     rospy.loginfo('Trying to save save stimulus info to ' + filename)
