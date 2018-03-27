@@ -42,7 +42,9 @@ odor_panel = {'4-methylcyclohexanol': (-2,),
 '''
 # TODO way to load parameter yaml directly? (for testing without ROS running)
 
-reinforced_odor_side_order = rospy.get_param('olf/reinforced_odor_side_order')
+# TODO add defaults for all and document this stuff externally
+reinforced_odor_side_order = rospy.get_param('olf/reinforced_odor_side_order',
+    'alternating')
 train_one_odor_at_a_time = \
     rospy.get_param('olf/train_one_odor_at_a_time', False)
 
@@ -72,10 +74,25 @@ post_pulse_ms = rospy.get_param('olf/post_pulse_ms')
 shock_ms_on = rospy.get_param('zap/shock_ms_on', 0)
 shock_ms_off = rospy.get_param('zap/shock_ms_off', 1)
 
-# TODO handle both?
-#left_shock = rospy.get_param('zap/left')
-#right_shock = rospy.get_param('zap/right')
-all_shock = rospy.get_param('zap/all_pin')
+left_shock = rospy.get_param('zap/left', None)
+right_shock = rospy.get_param('zap/right', None)
+all_shock = rospy.get_param('zap/all_pin', None)
+
+# maybe get rid of some parens, break up, or simplify
+if ((left_shock is None and not (right_shock is None)) or 
+    (right_shock is None and not (left_shock is None)) or 
+    ((not (all_shock is None)) and 
+      not ((left_shock is None) and (right_shock is None)))):
+
+    raise ValueError('only set either the parameters zap/all_shock or' + 
+        ' both zap/left_shock and zap/right_shock')
+
+elif all_shock is None:
+    one_pin_shock = False
+
+else:
+    one_pin_shock = True
+        
 
 # TODO TODO how to deal w/ symmetry re: sides? (blocks pick a random side to
 # start on?)
@@ -258,7 +275,6 @@ class StimuliGenerator:
         return expanded_pins, seq
 
 
-    # TODO how to handle shocking + presenting reinforced odor on both sides?
     def shock_transitions(self):
         """
         TODO
@@ -269,14 +285,21 @@ class StimuliGenerator:
         # TODO check this part
         if train_one_odor_at_a_time:
             if self.current_side_is_left:
-                return [all_shock], [transition, transition]
+                if one_pin_shock:
+                    # TODO what happens on the Arduino if it is given a
+                    # duplicate of a transition? does it behave appropriately or
+                    # fail?
+                    return [all_shock], [transition]
+                else:
+                    return [left_shock, right_shock], [transition, transition]
             else:
                 return [], []
 
         else:
-            # TODO fail if using all_shock
-            raise NotImplementedError('hardcoding zap/all_shock in config now')
-            # TODO add support (w/ parameter?) for shocking both sides?
+            if one_pin_shock:
+                raise ValueError('must specify zap/left_shock and ' +
+                    'zap/right_shock, if train_one_odor_at_a_time is False')
+
             if self.current_side_is_left:
                 return [left_shock], [transition]
             else:
@@ -290,6 +313,9 @@ class StimuliGenerator:
 
         pins, seq = self.odor_transitions()
         if reinforced_odor_side_order == 'alternating':
+            # TODO TODO rename current_side_is_left to indicate that it also
+            # controls whether the current training trial uses the reinforced
+            # odor or the non-reinforced odor. it does, right?
             self.current_side_is_left = not self.current_side_is_left 
 
         elif reinforced_odor_side_order == 'random':
@@ -352,8 +378,12 @@ rospy.logdebug('trial_structure', trial_structure)
 # low_pins = pins that default to low (0v)
 # high_pins = pins that default to high (5v)
 # pins should be in the default state during the intertrial interval
-#low_pins = left_pins + right_pins + [left_shock, right_shock]
-low_pins = left_pins + right_pins + [all_shock]
+
+if one_pin_shock:
+    low_pins = left_pins + right_pins + [all_shock]
+else:
+    low_pins = left_pins + right_pins + [left_shock, right_shock]
+
 high_pins = []
 if separate_balances:
     if balance_normally_flowing:
