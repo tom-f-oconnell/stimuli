@@ -18,9 +18,75 @@ from stimuli.srv import LoadSequenceRequest
 from stimuli_loader import StimuliLoader
 
 
-# TODO do i ever want to train the same flies on different pairs of odors
-# sequentially?  or maybe expose them to some odors / some sequence of odors
-# first (/ after?)?
+def get_params(param_dict, required_params, default_params):
+    """Fills param_dict values with the values each key has on the ROS parameter
+    server. Raises errors if these invalid combinations of parameters are
+    found:
+        - some, but not all, of required_params
+        - any default_params, but not all required_params
+
+    Args:
+        param_dict (dict): 
+        required_params (set): 
+        default_params (dict):
+
+    Returns whether any parameters were found.
+    """
+    def get_params_helper(params_to_get):
+        found = set()
+        not_found = set()
+
+        if type(params_to_get) is dict:
+            defaults = True
+        else:
+            defaults = False
+
+        for k in params_to_get:
+            try:
+                v = rospy.get_param(k)
+                assert not k in param_dict, '{} already in param_dict'.format(k)
+                param_dict[k] = v
+                found.add(k)
+            except KeyError as e:
+                not_found.add(k)
+                if defaults:
+                    param_dict[k] = params_to_get[k]
+
+        return found, not_found
+
+    def missing_params_err_msg():
+        error_msg = ''
+        for p in required_params:
+            error_msg += '{}\n'.format(p)
+        error_msg += '\nThe following were missing:\n'
+        for p in required_not_found:
+            error_msg += '{}\n'.format(p)
+        return error_msg
+        
+    # TODO provide mechanism to validate types / ranges as well?
+
+    required_found, required_not_found = get_params_helper(required_params)
+    if len(required_found) > 0 and len(required_found) < len(required_params):
+        error_msg = 'If any of the following parameters are specified, ' + \
+            'they all must be:\n'
+        error_msg += missing_params_err_msg()
+
+        # TODO is the convention to have the error message describe the whole
+        # problem, or to print stuff out before the error and then have a short
+        # error message?
+        raise ValueError(error_msg)
+
+    defaults_found, _ = get_params_helper(default_params)
+    # if len(required_found) > 0, there would already have been an error
+    if len(defaults_found) > 0 and len(required_found) == 0:
+        error_msg = 'Since {} were set, the '.format(defaults_found) + \
+            'following are required:\n'
+        error_msg += missing_params_err_msg()
+
+        raise ValueError(error_msg)
+
+    return len(defaults_found) > 0 or len(required_found) > 0
+
 
 # TODO provide a function in this file that stimuli_loader can call and pass a
 # parameter indicating where to find the containing file to stimuli_loader?
@@ -40,67 +106,143 @@ odor_panel = {'paraffin (mock)': (0,),
 odor_panel = {'4-methylcyclohexanol': (-2,),
               '3-octanol': (-2,)}
 '''
-# TODO way to load parameter yaml directly? (for testing without ROS running)
-
+# TODO load parameter yaml directly? (for testing without ROS running)
 # TODO add defaults for all and document this stuff externally
-reinforced_odor_side_order = rospy.get_param('olf/reinforced_odor_side_order',
-    'alternating')
-train_one_odor_at_a_time = \
-    rospy.get_param('olf/train_one_odor_at_a_time', False)
+params = dict()
+# TODO break out the validation checks here into another module, so that I can
+# add another command to just validate the configuration?
+###############################################################################
+# Parameters common to experiments with and without reinforcement
+###############################################################################
+required_params = {
+    'olf/left_pins',
+    'olf/right_pins',
+    'olf/odor_pulse_ms',
+    'olf/post_pulse_ms',
+    'olf/prestimulus_delay_s',
+    'olf/test_duration_s',
+    'olf/beyond_posttest_s'
+}
 
-training_blocks = rospy.get_param('olf/training_blocks')
-prestimulus_delay_s = rospy.get_param('olf/prestimulus_delay_s')
-test_duration_s = rospy.get_param('olf/test_duration_s')
-pretest_to_train_s = rospy.get_param('olf/pretest_to_train_s')
-train_duration_s = rospy.get_param('olf/train_duration_s')
-inter_train_interval_s = rospy.get_param('olf/inter_train_interval_s')
-train_to_posttest_s = rospy.get_param('olf/train_to_posttest_s')
-beyond_posttest_s = rospy.get_param('olf/beyond_posttest_s')
+optional_params = {
+    'olf/balance_normally_flowing': None,
+    'olf/left_balance': None,
+    'olf/right_balance': None,
+    'olf/odor_side_order': 'alternating'
+}
 
-left_pins = rospy.get_param('olf/left_pins')
-right_pins = rospy.get_param('olf/right_pins')
-separate_balances = rospy.get_param('olf/separate_balances', False)
-left_balance = rospy.get_param('olf/left_balance', None)
-right_balance = rospy.get_param('olf/right_balance', None)
+left_pins = params['olf/left_pins']
+right_pins = params['olf/right_pins']
+odor_pulse_ms = params['olf/odor_pulse_ms']
+post_pulse_ms = params['olf/post_pulse_ms']
+prestimulus_delay_s = params['olf/prestimulus_delay_s']
+test_duration_s = params['olf/test_duration_s']
+beyond_posttest_s = params['olf/beyond_posttest_s']
 
-if separate_balances and (left_balance is None or right_balance is None):
-    raise ValueError('need to specify balance pins')
+balance_normally_flowing = params['olf/balance_normally_flowing']
+left_balance = params['olf/left_balance']
+right_balance = params['olf/right_balance']
 
-balance_normally_flowing = rospy.get_param('olf/balance_normally_flowing', True)
+odor_side_order = params['olf/odor_side_order']
 
-odor_pulse_ms = rospy.get_param('olf/odor_pulse_ms')
-post_pulse_ms = rospy.get_param('olf/post_pulse_ms')
+if balance_normally_flowing is None:
+    if left_balance is None or right_balance is None:
+        raise ValueError('need to specify balance pins (olf/left_balance and ' +
+            'olf/right_balance) when olf/balance_normally_flowing is set')
+    else:
+        balance_normally_flowing = True
 
-shock_ms_on = rospy.get_param('zap/shock_ms_on', 0)
-shock_ms_off = rospy.get_param('zap/shock_ms_off', 1)
+if not (left_balance is None or right_balance is None):
+    balances = True
+else:
+    balances = False
 
-left_shock = rospy.get_param('zap/left', None)
-right_shock = rospy.get_param('zap/right', None)
-all_shock = rospy.get_param('zap/all_pin', None)
+if not (odor_side_order == 'alternating' or odor_side_order == 'random'):
+    raise ValueError("olf/odor_side_order must be either 'random' or " + 
+        "'alternating'")
 
-# maybe get rid of some parens, break up, or simplify
-if ((left_shock is None and not (right_shock is None)) or 
-    (right_shock is None and not (left_shock is None)) or 
-    ((not (all_shock is None)) and 
-      not ((left_shock is None) and (right_shock is None)))):
+###############################################################################
+# Parameters unique to experiments with reinforcement (training)
+###############################################################################
+required_training_params = {
+    'olf/training_blocks',
+    'olf/pretest_to_train_s',
+    'olf/train_duration_s',
+    'olf/inter_train_interval_s',
+    'olf/train_to_posttest_s',
+    # TODO document what means always on or always off, among other things
+    'zap/shock_ms_on', 
+    'zap/shock_ms_off'
+}
+# If any of these are specified, fail if not all of the required parameters are
+# set.
+optional_training_params = {
+    # TODO maybe just set this conditional on some operant/classical option?
+    # TODO should also be an error if this is set when none of the other
+    # training
+    'olf/train_one_odor_at_a_time': True,
 
-    raise ValueError('only set either the parameters zap/all_shock or' + 
-        ' both zap/left_shock and zap/right_shock')
+    # TODO update definitions other places to use these parameter names
+    'zap/left_control_pin': None,
+    'zap/right_control_pin': None,
+    'zap/control_pin': None
+}
 
-elif all_shock is None:
+have_training_params = \
+    get_params(params, required_training_params, optional_training_params)
+
+left_shock = params['zap/left_control_pin']
+right_shock = params['zap/right_control_pin']
+all_shock = params['zap/control_pin']
+
+have_left = left_shock is None
+have_right = right_shock is None
+have_one_pin = all_shock is None
+
+if ((not (have_left or have_right or have_one_pin)) or
+    (have_left and not have_right) or (have_right and not have_left) or 
+    have_one_pin and (have_left or have_right)):
+
+    raise ValueError('only set either the parameters zap/control_pin or' + 
+        ' both zap/left_control_pin and zap/right_control_pin')
+elif have_one_pin:
+    one_pin_shock = True
+else:
     one_pin_shock = False
 
-else:
-    one_pin_shock = True
-        
+training_blocks = params['olf/training_blocks']
+pretest_to_train_s = params['olf/pretest_to_train_s']
+train_duration_s = params['olf/train_duration_s']
+inter_train_interval_s = params['olf/inter_train_interval_s']
+train_to_posttest_s = params['olf/train_to_posttest_s']
+shock_ms_on = params['zap/shock_ms_on']
+shock_ms_off = params['zap/shock_ms_off']
 
-# TODO TODO how to deal w/ symmetry re: sides? (blocks pick a random side to
-# start on?)
+train_one_odor_at_a_time = params['olf/train_one_odor_at_a_time']
 
-# TODO for now, just save sides to a separate file to be loaded by that ROS node
+###############################################################################
+# Parameters unique to experiments with NO reinforcement
+# (only repeating the same test, over and over)
+###############################################################################
+required_testonly_params = {
+    'olf/testing_blocks',
+    'olf/inter_test_interval_s'
+}
+
+have_testonly_params = get_params(params, required_testonly_params, dict())
+
+testing_blocks = params['olf/testing_blocks']
+inter_test_interval_s = params['olf/inter_test_interval_s']
+
+if ((have_testonly_params and have_training_params) or 
+    not (have_testonly_params or have_training_params)):
+
+    raise ValueError('must set either test-only or training parameters')
 
 ###############################################################################
 
+# TODO maybe just reset at like 5am or check for experiments in last few hours, 
+# to use the same mappings after midnight, but in the same workday
 daily_connections_filename = '.' + time.strftime('%Y%m%d', time.localtime()) + \
     '_mappings.p'
 if os.path.isfile(daily_connections_filename):
@@ -143,7 +285,7 @@ if generate:
     left_pins = random.sample(left_pins, len(odors))
     right_pins = random.sample(right_pins, len(odors))
 
-    # TODO improve
+    # TODO improve (?)
     if len(odors) > 1:
         with open(daily_connections_filename, 'wb') as f:
             rospy.loginfo('temporarily saving odors and odor->pin mappings ' + \
@@ -160,7 +302,6 @@ if generate:
 # assign them to random pins / ports
 # needs |pins| >= |odors|
 # (samples without replacement)
-# TODO load pickle if it is there / if same day? prompt?
 
 rospy.loginfo('Left pins:')
 for pin, odor_pair in sorted(zip(left_pins, odors), key=lambda x: x[0]):
@@ -177,14 +318,17 @@ if len(odors) == 1:
     unreinforced = None
     rospy.logwarn('not pulsing mock on opposite side')
 else:
-    # TODO rename
+    # TODO rename (because sometimes we don't have any training trials?)
     reinforced, unreinforced = random.sample(odors, 2)
 
 if len(odors) > 1 and training_blocks != 0:
     rospy.loginfo('pairing shock with '  + str(reinforced))
     rospy.loginfo('unpaired ' + str(unreinforced))
 
-# TODO also only start recording when this is done?
+# TODO also only start recording when this is done? (when using this with
+# multi_tracker) (maybe preferably, just make sure tracking is started before
+# starting stimuli)
+
 # TODO when should i wait / not wait? need the param?
 wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
@@ -192,8 +336,6 @@ if wait_for_keypress:
 
 odors2left_pins = dict(zip(odors, left_pins))
 odors2right_pins = dict(zip(odors, right_pins))
-
-# TODO pause until person has connected stuff?
 
 ###############################################################################
 
@@ -225,7 +367,7 @@ class StimuliGenerator:
 
         expanded_pins = []
         seq = []
-        if separate_balances:
+        if balances:
             balance_pins = [left_balance, right_balance]
 
             if balance_normally_flowing:
@@ -246,6 +388,7 @@ class StimuliGenerator:
         # TODO check / test this part
         if train and train_one_odor_at_a_time:
             # TODO probably rename this flag to indicate its use here as well?
+            # at least document
             if self.current_side_is_left:
                 pins = [odors2left_pins[reinforced], \
                     odors2right_pins[reinforced]]
@@ -267,7 +410,6 @@ class StimuliGenerator:
                 else:
                     pins = [odors2right_pins[reinforced]]
 
-        # TODO will need to make sure pins aren't turned into a set later
         for p in pins:
             expanded_pins.extend(len(transition) * [p])
             seq.extend(transition)
@@ -282,8 +424,10 @@ class StimuliGenerator:
         square_wave = State(ms_on=shock_ms_on, ms_off=shock_ms_off)
         transition = Transition(self.current_t0, square_wave)
 
-        # TODO check this part
         if train_one_odor_at_a_time:
+            # when train_one_odor_at_a_time is True, current_side_is_left
+            # indicates whether the current training epoch will use the
+            # reinforced_odor or the unreinforced_odor
             if self.current_side_is_left:
                 if one_pin_shock:
                     # TODO what happens on the Arduino if it is given a
@@ -312,13 +456,13 @@ class StimuliGenerator:
         self.current_t0 = end
 
         pins, seq = self.odor_transitions()
-        if reinforced_odor_side_order == 'alternating':
+        if odor_side_order == 'alternating':
             # TODO TODO rename current_side_is_left to indicate that it also
             # controls whether the current training trial uses the reinforced
             # odor or the non-reinforced odor. it does, right?
             self.current_side_is_left = not self.current_side_is_left 
 
-        elif reinforced_odor_side_order == 'random':
+        elif odor_side_order == 'random':
             self.current_side_is_left = random.choice([True, False])
 
         pins_to_signal = []
@@ -337,10 +481,10 @@ class StimuliGenerator:
         pins = odor_pins + shock_pins
         seq = odor_seq + shock_seq
 
-        if reinforced_odor_side_order == 'alternating':
+        if odor_side_order == 'alternating':
             self.current_side_is_left = not self.current_side_is_left 
 
-        elif reinforced_odor_side_order == 'random':
+        elif odor_side_order == 'random':
             self.current_side_is_left = random.choice([True, False])
 
         pins_to_signal = []
@@ -385,7 +529,7 @@ else:
     low_pins = left_pins + right_pins + [left_shock, right_shock]
 
 high_pins = []
-if separate_balances:
+if balances:
     if balance_normally_flowing:
         low_pins += [left_balance, right_balance]
     else:
@@ -399,7 +543,9 @@ default_states = [DefaultState(p, True) for p in set(high_pins)] + \
 
 ###############################################################################
 
-# can i do this from outside of a node?
+# So this won't publish to /rosout unless this is called from a node that has
+# been "set up properly" with init_node. Is that required for it to be displayed
+# on the screen? Or saved in log files elsewhere?
 rospy.loginfo('Stimuli should finish at ' + \
     datetime.datetime.fromtimestamp(gen.current_t0.to_sec()).strftime(\
     '%Y-%m-%d %H:%M:%S'))
