@@ -237,7 +237,8 @@ inter_test_interval_s = params['olf/inter_test_interval_s']
 if ((have_testonly_params and have_training_params) or 
     not (have_testonly_params or have_training_params)):
 
-    raise ValueError('must set either test-only or training parameters')
+    raise ValueError(
+        'must set either test-only or training parameters, and not both.')
 
 ###############################################################################
 
@@ -253,23 +254,23 @@ if os.path.isfile(daily_connections_filename):
             daily_connections_filename)
         with open(daily_connections_filename, 'rb') as f:
             odors, left_pins, right_pins = pickle.load(f)
-        generate = False
+        generate_odor_to_pin_connections = False
 
     elif c.lower() == 'n':
-        generate = True
+        generate_odor_to_pin_connections = True
 
     elif c.lower() == 'd':
         rospy.logwarn('Deleting ' + daily_connections_filename)
         os.remove(daily_connections_filename)
-        generate = True
+        generate_odor_to_pin_connections = True
 
     else:
         raise ValueError('invalid choice')
 
 else:
-    generate = True
+    generate_odor_to_pin_connections = True
 
-if generate:
+if generate_odor_to_pin_connections:
     rospy.loginfo('did not find saved odors and odor->pin mappings to load')
     #odors = list(odor_panel)
     # TODO put in config file
@@ -303,6 +304,9 @@ if generate:
 # needs |pins| >= |odors|
 # (samples without replacement)
 
+# TODO open a new terminal for these / GUI, to make it not get hard to see among
+# mess printed to terminal? (do I still care it is logged through ROS
+# facilities?)
 rospy.loginfo('Left pins:')
 for pin, odor_pair in sorted(zip(left_pins, odors), key=lambda x: x[0]):
     rospy.loginfo(str(pin) + ' -> ' + str(odor_pair))
@@ -325,10 +329,10 @@ if len(odors) > 1 and training_blocks != 0:
     rospy.loginfo('pairing shock with '  + str(reinforced))
     rospy.loginfo('unpaired ' + str(unreinforced))
 
+# include this in optional parameter dict above?
 # TODO also only start recording when this is done? (when using this with
 # multi_tracker) (maybe preferably, just make sure tracking is started before
 # starting stimuli)
-
 # TODO when should i wait / not wait? need the param?
 wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
@@ -502,19 +506,36 @@ class StimuliGenerator:
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 gen = StimuliGenerator()
+
+# Get the (initial) time, before each call to one of the generator's functions
+# internally increments this time.
 t0_sec = gen.current_t0.to_sec()
 
-# TODO repeat code to accommodate variable number of blocks for test
-trial_structure = [gen.delay(prestimulus_delay_s), \
-                   gen.test(), \
-                   gen.delay(pretest_to_train_s)] + \
-                  ((flatten([[f(), gen.delay(inter_train_interval_s)] for f \
-                    in [gen.train] * (training_blocks - 1)]) + \
-                  [gen.train()]) if training_blocks > 0 else []) + \
-                  [gen.delay(train_to_posttest_s), \
-                   gen.test(), \
-                   gen.delay(beyond_posttest_s)]
-epoch_labels = ['test'] + ['train'] * training_blocks + ['test']
+if have_training_params:
+    # TODO factor out code to accommodate variable number of training blocks for
+    # testing blocks?
+    trial_structure = [gen.delay(prestimulus_delay_s),
+                       gen.test(),
+                       gen.delay(pretest_to_train_s)] + \
+                      ((flatten([[f(), gen.delay(inter_train_interval_s)] for f
+                        in [gen.train] * (training_blocks - 1)]) + \
+                      [gen.train()]) if training_blocks > 0 else []) + \
+                      [gen.delay(train_to_posttest_s),
+                       gen.test(),
+                       gen.delay(beyond_posttest_s)]
+
+    # TODO handle this concurrently w/ trial_structure generation, to make sure
+    # they are always consistent?
+    epoch_labels = ['test'] + ['train'] * training_blocks + ['test']
+
+elif have_testonly_params:
+    trial_structure = [gen.delay(prestimulus_delay_s)] + \
+                      ((flatten([[f(), gen.delay(inter_test_interval_s)] for f
+                        in [gen.test] * (testing_blocks - 1)]) + \
+                      [gen.test()]) if training_blocks > 0 else []) + \
+                      [gen.test(),
+                       gen.delay(beyond_posttest_s)]
+    epoch_labels = ['test']  * testing_blocks
 
 # TODO even if not printed to /rosout, is this saved by default?
 rospy.logdebug('trial_structure', trial_structure)
@@ -523,10 +544,12 @@ rospy.logdebug('trial_structure', trial_structure)
 # high_pins = pins that default to high (5v)
 # pins should be in the default state during the intertrial interval
 
-if one_pin_shock:
-    low_pins = left_pins + right_pins + [all_shock]
-else:
-    low_pins = left_pins + right_pins + [left_shock, right_shock]
+low_pins = left_pins + right_pins
+if have_training_params:
+    if one_pin_shock:
+        low_pins += [all_shock]
+    else:
+        low_pins += [left_shock, right_shock]
 
 high_pins = []
 if balances:

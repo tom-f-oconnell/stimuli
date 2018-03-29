@@ -1,0 +1,3 @@
+ - rename odor_randomizer to stimuli_randomizer, if I can provide some means of
+   also specifying other stimuli in the same framework (and then map odors to
+   pins through that mechanism)
