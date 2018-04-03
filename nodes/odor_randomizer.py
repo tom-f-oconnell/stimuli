@@ -131,6 +131,8 @@ optional_params = {
     'olf/odor_side_order': 'alternating'
 }
 
+get_params(params, required_params, optional_params)
+
 left_pins = params['olf/left_pins']
 right_pins = params['olf/right_pins']
 odor_pulse_ms = params['olf/odor_pulse_ms']
@@ -185,40 +187,46 @@ optional_training_params = {
     # TODO update definitions other places to use these parameter names
     'zap/left_control_pin': None,
     'zap/right_control_pin': None,
+    # TODO still support left / right
     'zap/control_pin': None
 }
 
 have_training_params = \
     get_params(params, required_training_params, optional_training_params)
 
-left_shock = params['zap/left_control_pin']
-right_shock = params['zap/right_control_pin']
-all_shock = params['zap/control_pin']
+if have_training_params:
+    left_shock = params['zap/left_control_pin']
+    right_shock = params['zap/right_control_pin']
+    all_shock = params['zap/control_pin']
+    # TODO delete me
+    rospy.logwarn('left_shock: {}'.format(left_shock))
+    rospy.logwarn('right_shock: {}'.format(right_shock))
+    rospy.logwarn('all_shock: {}'.format(all_shock))
 
-have_left = left_shock is None
-have_right = right_shock is None
-have_one_pin = all_shock is None
+    have_left = not (left_shock is None)
+    have_right = not (right_shock is None)
+    have_one_pin = not (all_shock is None)
 
-if ((not (have_left or have_right or have_one_pin)) or
-    (have_left and not have_right) or (have_right and not have_left) or 
-    have_one_pin and (have_left or have_right)):
+    if ((not (have_left or have_right or have_one_pin)) or
+        (have_left and not have_right) or (have_right and not have_left) or 
+        have_one_pin and (have_left or have_right)):
 
-    raise ValueError('only set either the parameters zap/control_pin or' + 
-        ' both zap/left_control_pin and zap/right_control_pin')
-elif have_one_pin:
-    one_pin_shock = True
-else:
-    one_pin_shock = False
+        raise ValueError('only set either the parameters zap/control_pin or' + 
+            ' both zap/left_control_pin and zap/right_control_pin')
+    elif have_one_pin:
+        one_pin_shock = True
+    else:
+        one_pin_shock = False
 
-training_blocks = params['olf/training_blocks']
-pretest_to_train_s = params['olf/pretest_to_train_s']
-train_duration_s = params['olf/train_duration_s']
-inter_train_interval_s = params['olf/inter_train_interval_s']
-train_to_posttest_s = params['olf/train_to_posttest_s']
-shock_ms_on = params['zap/shock_ms_on']
-shock_ms_off = params['zap/shock_ms_off']
+    training_blocks = params['olf/training_blocks']
+    pretest_to_train_s = params['olf/pretest_to_train_s']
+    train_duration_s = params['olf/train_duration_s']
+    inter_train_interval_s = params['olf/inter_train_interval_s']
+    train_to_posttest_s = params['olf/train_to_posttest_s']
+    shock_ms_on = params['zap/shock_ms_on']
+    shock_ms_off = params['zap/shock_ms_off']
 
-train_one_odor_at_a_time = params['olf/train_one_odor_at_a_time']
+    train_one_odor_at_a_time = params['olf/train_one_odor_at_a_time']
 
 ###############################################################################
 # Parameters unique to experiments with NO reinforcement
@@ -231,8 +239,9 @@ required_testonly_params = {
 
 have_testonly_params = get_params(params, required_testonly_params, dict())
 
-testing_blocks = params['olf/testing_blocks']
-inter_test_interval_s = params['olf/inter_test_interval_s']
+if have_testonly_params:
+    testing_blocks = params['olf/testing_blocks']
+    inter_test_interval_s = params['olf/inter_test_interval_s']
 
 if ((have_testonly_params and have_training_params) or 
     not (have_testonly_params or have_training_params)):
@@ -434,11 +443,13 @@ class StimuliGenerator:
             # reinforced_odor or the unreinforced_odor
             if self.current_side_is_left:
                 if one_pin_shock:
+                    rospy.loginfo('ONE PIN SHOCK (in shock_transitions)')
                     # TODO what happens on the Arduino if it is given a
                     # duplicate of a transition? does it behave appropriately or
                     # fail?
                     return [all_shock], [transition]
                 else:
+                    rospy.loginfo('TWO PIN SHOCK')
                     return [left_shock, right_shock], [transition, transition]
             else:
                 return [], []
