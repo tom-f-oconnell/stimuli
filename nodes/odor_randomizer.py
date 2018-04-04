@@ -128,7 +128,9 @@ optional_params = {
     'olf/balance_normally_flowing': None,
     'olf/left_balance': None,
     'olf/right_balance': None,
-    'olf/odor_side_order': 'alternating'
+    'olf/odor_side_order': 'alternating',
+    'olf/air_balance': None,
+    'olf/solvent_balance': None
 }
 
 get_params(params, required_params, optional_params)
@@ -162,6 +164,36 @@ else:
 if not (odor_side_order == 'alternating' or odor_side_order == 'random'):
     raise ValueError("olf/odor_side_order must be either 'random' or " + 
         "'alternating'")
+
+# TODO maybe refactor if to be more straightforward / efficient
+# TODO test
+if not (params['olf/air_balance'] is None or
+    params['olf/solvent_balance'] is None):
+
+    # should be negation of xor
+    if ((params['olf/air_balance'] and params['olf/solvent_balance']) or
+        not (params['olf/air_balance'] or params['olf/solvent_balance'])):
+
+        raise ValueError('olf/air_balance and olf/solvent_balance ' + 
+            'are redundant. If both are set, they must be consistent. ' + 
+            'Only one can be True.')
+
+    else:
+        # they are consistent. either could be used to set air_balance.
+        air_balance = params['olf/air_balance']
+
+elif (params['olf/air_balance'] is None and
+      params['olf/solvent_balance'] is None):
+    
+    # the default is olf/air_balance = True
+    air_balance = True
+
+else params['olf/solvent_balance'] is None:
+    air_balance = params['olf/air_balance']
+
+elif params['olf/air_balance'] is None:
+    air_balance = not params['olf/solvent_balance']
+    
 
 ###############################################################################
 # Parameters unique to experiments with reinforcement (training)
@@ -283,7 +315,12 @@ if generate_odor_to_pin_connections:
     rospy.loginfo('did not find saved odors and odor->pin mappings to load')
     #odors = list(odor_panel)
     # TODO put in config file
-    mock = ('air', 0)
+    if air_balance:
+        # TODO maybe rename to 'balance'?
+        mock = ('air', 0)
+    else:
+        mock = ('paraffin oil', 0)
+
     odors = [('isoamyl acetate', -3), ('paraffin oil', 0)]
     #odors = rospy.get_param('olf/odors', ['UNSPECIFIED_ODOR'])
     # TODO fix
