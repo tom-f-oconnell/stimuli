@@ -283,8 +283,8 @@ if generate_odor_to_pin_connections:
     rospy.loginfo('did not find saved odors and odor->pin mappings to load')
     #odors = list(odor_panel)
     # TODO put in config file
-    mock = ('paraffin (mock)', 0)
-    odors = [('4-methylcyclohexanol', -2), ('3-octanol', -2)]
+    mock = ('air', 0)
+    odors = [('isoamyl acetate', -3), ('paraffin oil', 0)]
     #odors = rospy.get_param('olf/odors', ['UNSPECIFIED_ODOR'])
     # TODO fix
     #odors = list(map(lambda x: (x, np.nan), odors))
@@ -334,9 +334,10 @@ else:
     # TODO rename (because sometimes we don't have any training trials?)
     reinforced, unreinforced = random.sample(odors, 2)
 
-if len(odors) > 1 and training_blocks != 0:
-    rospy.loginfo('pairing shock with '  + str(reinforced))
-    rospy.loginfo('unpaired ' + str(unreinforced))
+if have_training_params:
+	if len(odors) > 1 and training_blocks != 0:
+	    rospy.loginfo('pairing shock with '  + str(reinforced))
+	    rospy.loginfo('unpaired ' + str(unreinforced))
 
 # include this in optional parameter dict above?
 # TODO also only start recording when this is done? (when using this with
@@ -543,7 +544,7 @@ elif have_testonly_params:
     trial_structure = [gen.delay(prestimulus_delay_s)] + \
                       ((flatten([[f(), gen.delay(inter_test_interval_s)] for f
                         in [gen.test] * (testing_blocks - 1)]) + \
-                      [gen.test()]) if training_blocks > 0 else []) + \
+                      [gen.test()]) if testing_blocks > 0 else []) + \
                       [gen.test(),
                        gen.delay(beyond_posttest_s)]
     epoch_labels = ['test']  * testing_blocks
