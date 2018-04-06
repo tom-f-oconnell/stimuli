@@ -23,7 +23,7 @@ class ValveTester:
 
         # to allow arduino to get parameters before services are called
         # (so that debug flag can be in effect during services)
-        rospy.sleep(8.0)
+        rospy.sleep(5.0)
 
         rospy.loginfo('valve_tester sending default states')
         left_pins = rospy.get_param('olf/left_pins', [])
@@ -56,7 +56,7 @@ class ValveTester:
         rospy.loginfo('valve_tester finished sending default states')
         
         block_num = 0
-        rate = rospy.Rate(0.1)
+        rate = rospy.Rate(0.5)
         while not rospy.is_shutdown():
             for p in pins_to_test:
                 h = Header()
