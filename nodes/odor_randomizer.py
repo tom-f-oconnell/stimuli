@@ -46,6 +46,8 @@ train_one_odor_at_a_time = rospy.get_param('olf/train_one_odor_at_a_time', False
 
 training_blocks = rospy.get_param('olf/training_blocks')
 prestimulus_delay_s = rospy.get_param('olf/prestimulus_delay_s')
+# TODO should i make it so if any thing is set to zero that isn't inserted into
+# trial structure list? would probably need to test these cases thoroughly either way...
 test_duration_s = rospy.get_param('olf/test_duration_s')
 pretest_to_train_s = rospy.get_param('olf/pretest_to_train_s')
 train_duration_s = rospy.get_param('olf/train_duration_s')
@@ -260,6 +262,10 @@ class StimuliGenerator:
                 return [right_shock], [transition]
 
 
+    # TODO if i am going to have duration_s = 0 => no element in list, would it be
+    # cleaner to do it in these block generating fns (return empty list) or elsewhere?
+    # might dependend on whether i also want to remove surrounding delays
+    # (potentially independent of the value of those parameters)
     def test(self):
         start = self.current_t0
         end = start + rospy.Duration(test_duration_s)
@@ -311,17 +317,45 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 gen = StimuliGenerator()
 t0_sec = gen.current_t0.to_sec()
 
+def blocks_with_interval(block_generating_fn, interval_s, num_blocks):
+    """
+    Returns a list of alternating stimuli.srv.LoadSequenceRequest and delays,
+    where the delays of type rospy.Time. Number of sequence requests is equal
+    to num_blocks.
+    """
+    # TODO make dependence on gen explicit / refactor to remove it?
+    return (flatten([[f(), gen.delay(interval_s)] for f \
+        in [block_generating_fn] * (num_blocks - 1)]) + \
+        [block_generating_fn()]) if num_blocks > 0 else []
+
 # TODO repeat code to accommodate variable number of blocks for test
-trial_structure = [gen.delay(prestimulus_delay_s), \
-                   gen.test(), \
-                   gen.delay(pretest_to_train_s)] + \
-                  ((flatten([[f(), gen.delay(inter_train_interval_s)] for f \
-                    in [gen.train] * (training_blocks - 1)]) + \
-                  [gen.train()]) if training_blocks > 0 else []) + \
-                  [gen.delay(train_to_posttest_s), \
-                   gen.test(), \
-                   gen.delay(beyond_posttest_s)]
-epoch_labels = ['test'] + ['train'] * training_blocks + ['test']
+# TODO refactor to not have explicit delays, and just have loader 
+# send appropriate amount of time before (or maybe fail?)
+# or eventually have the arduino act as the client here, and request
+# the stimulus info for a given block
+trial_structure = [gen.delay(prestimulus_delay_s)]
+# TODO make this generated in same functions. append pairs of data to list (label, info)?
+epoch_labels = []
+
+if test_duration_s > 0:
+    # TODO TODO test case where any of these delays are zero...
+    # and warn if they are in ranges that dont work.
+    trial_structure += [gen.test(), gen.delay(pretest_to_train_s)]
+    epoch_labels += ['test']
+
+trial_structure += blocks_with_interval(gen.train, inter_train_interval_s , training_blocks)
+epoch_labels += ['train'] * training_blocks
+
+if test_duration_s > 0:
+    # TODO rename one of either pretest_to_train_s or train_to_posttest_s to indicate that one
+    # should also be used if there are only to be multiple tests (or just add one?)
+    if training_blocks > 0:
+        trial_structure += [gen.delay(train_to_posttest_s)]
+    trial_structure += [gen.test()]
+    epoch_labels += ['test']
+
+# TODO rename to also make sense if there are no tests...
+trial_structure += [gen.delay(beyond_posttest_s)]
 
 # TODO even if not printed to /rosout, is this saved by default?
 rospy.logdebug('trial_structure', trial_structure)
