@@ -188,7 +188,7 @@ elif (params['olf/air_balance'] is None and
     # the default is olf/air_balance = True
     air_balance = True
 
-else params['olf/solvent_balance'] is None:
+elif params['olf/solvent_balance'] is None:
     air_balance = params['olf/air_balance']
 
 elif params['olf/air_balance'] is None:
@@ -578,16 +578,19 @@ if have_training_params:
     epoch_labels = ['test'] + ['train'] * training_blocks + ['test']
 
 elif have_testonly_params:
+    # TODO looks like case where testing_blocks = 1 might have extra long
+    # posttest period (=beyond_post_test_s + inter_test_interval_s). fix
     trial_structure = [gen.delay(prestimulus_delay_s)] + \
                       ((flatten([[f(), gen.delay(inter_test_interval_s)] for f
                         in [gen.test] * (testing_blocks - 1)]) + \
                       [gen.test()]) if testing_blocks > 0 else []) + \
-                      [gen.test(),
-                       gen.delay(beyond_posttest_s)]
+                      [gen.delay(beyond_posttest_s)]
     epoch_labels = ['test']  * testing_blocks
 
 # TODO even if not printed to /rosout, is this saved by default?
+# (seems like no)
 rospy.logdebug('trial_structure', trial_structure)
+rospy.logdebug('epoch_labels', epoch_labels)
 
 # low_pins = pins that default to low (0v)
 # high_pins = pins that default to high (5v)
