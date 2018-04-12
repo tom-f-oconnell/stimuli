@@ -345,8 +345,8 @@ if generate_odor_to_pin_connections:
 
     # TODO TODO rename to indicate the order is important, or use a different
     # datatype
-    left_pins = random.sample(left_pins, len(odors))
-    right_pins = random.sample(right_pins, len(odors))
+    #left_pins = random.sample(left_pins, len(odors))
+    #right_pins = random.sample(right_pins, len(odors))
 
     # TODO improve (?)
     if len(odors) > 1:
