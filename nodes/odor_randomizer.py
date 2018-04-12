@@ -124,6 +124,9 @@ required_params = {
     'olf/beyond_posttest_s'
 }
 
+# TODO TODO allow option to prespecify odor connections
+# (and maybe another option to indicate whether this or random connections are
+#  desired)
 optional_params = {
     'olf/balance_normally_flowing': None,
     'olf/left_balance': None,
@@ -329,6 +332,19 @@ if generate_odor_to_pin_connections:
 
     print(odors, len(odors), left_pins)
 
+    # TODO TODO TODO delete me. hack to enforce the connection K already has + wants
+    # since these are zipped w/ odors to determine pairing, and odors never
+    # changes order from definition above, the first pin in each of these lists
+    # will get the first odor in odors, and so on.
+    # TODO document this behavior (or explicitly save mappings) for people who
+    # might want to load the pickle and make sense of it. actually... is
+    # ultimately saved pickle better? check that too. (+ more important to
+    # document that one)
+    left_pins = [4, 7]
+    right_pins = [5, 6]
+
+    # TODO TODO rename to indicate the order is important, or use a different
+    # datatype
     left_pins = random.sample(left_pins, len(odors))
     right_pins = random.sample(right_pins, len(odors))
 
@@ -353,6 +369,9 @@ if generate_odor_to_pin_connections:
 # TODO open a new terminal for these / GUI, to make it not get hard to see among
 # mess printed to terminal? (do I still care it is logged through ROS
 # facilities?)
+# TODO TODO TODO maybe only generate this from odors2<X>_pins, to minimize risk
+# of divergence through code changes
+'''
 rospy.loginfo('Left pins:')
 for pin, odor_pair in sorted(zip(left_pins, odors), key=lambda x: x[0]):
     rospy.loginfo(str(pin) + ' -> ' + str(odor_pair))
@@ -360,6 +379,7 @@ for pin, odor_pair in sorted(zip(left_pins, odors), key=lambda x: x[0]):
 rospy.loginfo('Right pins:')
 for pin, odor_pair in sorted(zip(right_pins, odors), key=lambda x: x[0]):
     rospy.loginfo(str(pin) + ' -> ' + str(odor_pair))
+'''
 
 # TODO how to support no mock? (potentially just 1 odor in total)
 # TODO fix hack
@@ -385,8 +405,22 @@ wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
     raw_input('Press Enter when the odor vials are connected.')
 
+
+# TODO TODO TODO make sure randomness isn't broken here, and that the mappings
+# instructing the user are those ultimately followed and recorded in the trial
+# structure!
 odors2left_pins = dict(zip(odors, left_pins))
 odors2right_pins = dict(zip(odors, right_pins))
+
+# TODO delete me (for debugging)
+o1 = ('isoamyl acetate', -3)
+o2 = ('paraffin oil', 0)
+o1_pins = [p for o, p in odors2left_pins.items() if o == o1] + \
+    [p for o, p in odors2right_pins.items() if o == o1]
+o2_pins = [p for o, p in odors2left_pins.items() if o == o2] + \
+    [p for o, p in odors2right_pins.items() if o == o2]
+print('PINS THAT YOU SHOULD HAVE BEEN TOLD TO CONNECT TO {}: {}'.format(o1, o1_pins))
+print('PINS THAT YOU SHOULD HAVE BEEN TOLD TO CONNECT TO {}: {}'.format(o2, o2_pins))
 
 ###############################################################################
 
