@@ -291,8 +291,11 @@ if ((have_testonly_params and have_training_params) or
 daily_connections_filename = '.' + time.strftime('%Y%m%d', time.localtime()) + \
     '_mappings.p'
 if os.path.isfile(daily_connections_filename):
+    '''
     c = raw_input('Found saved mappings from today. Load them? ' + \
         '([y]es/[n]o/[d]elete them.')
+    '''
+    c = 'd'
     if c.lower() == 'y':
         rospy.loginfo('loading odors and odor->pin mappings from ' + \
             daily_connections_filename)
