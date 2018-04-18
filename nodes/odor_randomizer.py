@@ -158,23 +158,23 @@ odors = params['olf/odors']
 assert len(odors) > 0, 'List of odors can not be empty. See docs for format.'
 for odor in odors:
     if not (type(odor) is dict) or len(odor.keys()) == 0:
-        raise ValueError("each entry of 'odors' parameter should parse as " +
-            "non-empty dictionary")
+        raise ValueError("each entry of 'olf/odors' parameter should parse as" +
+            " non-empty dictionary")
 
     if not 'name' in odor.keys():
-        raise ValueError("Each 'odors' entry needs a key 'name: X'")
+        raise ValueError("Each 'olf/odors' entry needs a key 'name: X'")
 
     # TODO convert to effective dilution given flow conditions / mixing ratios?
     if not 'vial_log10_concentration' in odor.keys():
-        raise ValueError("Each 'odors' entry needs a key " +
+        raise ValueError("Each 'olf/odors' entry needs a key " +
             "'vial_log10_concentration: <negative integer or 0>'")
 
     for k in odor.keys():
         if k not in {'name', 'vial_log10_concentration',
             'left_pin', 'right_pin'}:
 
-            raise ValueError('Did not recognize key {} in an entry under ' + 
-                "'odors' parameter.")
+            raise ValueError('Did not recognize key {}'.format(k) +
+                "in an entry under 'olf/odors' parameter.")
 
 if random_valve_connections:
     for odor in odors:
@@ -182,15 +182,15 @@ if random_valve_connections:
             ('All odors must be randomized if ' +
             'olf/random_valve_connections is True, so do not specify ' +
             'left_pin / right_pin for any of the odors in the list under the' +
-            " 'odors' parameter. Otherwise, set olf/random_valve_connections " +
-            'to False.')
+            " 'olf/odors' parameter. Otherwise, set " +
+            "'olf/random_valve_connections' to False.")
 
 else:
     for odor in odors:
         assert (('left_pin' in odor) and ('right_pin' in odor)), \
             ('If not randomizing connections between odor vials and valves, ' +
              'you must specify left_pin and right_pin under each element in ' +
-             "the parameter 'odors'.")
+             "the parameter 'olf/odors'.")
 
 
 if balance_normally_flowing is None:
@@ -362,9 +362,6 @@ else:
     generate_odor_to_pin_connections = True
 
 if generate_odor_to_pin_connections:
-    odor_panel = {'4-methylcyclohexanol': (-2,),
-                  '3-octanol': (-2,)}
-
     rospy.loginfo('did not find saved odors and odor->pin mappings to load')
     #odors = list(odor_panel)
     # TODO put in config file
@@ -377,17 +374,9 @@ if generate_odor_to_pin_connections:
     else:
         mock = ('paraffin oil', 0)
 
-    #odors = [('isoamyl acetate', -3), ('paraffin oil', 0)]
+    #odors = [('isoamyl acetate', -2), ('paraffin oil', 0)]
     odors = [(x['name'], x['vial_log10_concentration']) for x in odors]
-    #odors = rospy.get_param('olf/odors', ['UNSPECIFIED_ODOR'])
-    # TODO fix
-    #odors = list(map(lambda x: (x, np.nan), odors))
-    #odors.append(mock)
 
-    # TODO TODO TODO delete me. hack to enforce the connection K already has + wants
-    # since these are zipped w/ odors to determine pairing, and odors never
-    # changes order from definition above, the first pin in each of these lists
-    # will get the first odor in odors, and so on.
     # TODO document this behavior (or explicitly save mappings) for people who
     # might want to load the pickle and make sense of it. actually... is
     # ultimately saved pickle better? check that too. (+ more important to
@@ -470,7 +459,7 @@ odors2left_pins = dict(zip(odors, left_pins))
 odors2right_pins = dict(zip(odors, right_pins))
 
 # TODO delete me (for debugging)
-o1 = ('isoamyl acetate', -3)
+o1 = ('isoamyl acetate', -2)
 o2 = ('paraffin oil', 0)
 o1_pins = [p for o, p in odors2left_pins.items() if o == o1] + \
     [p for o, p in odors2right_pins.items() if o == o1]
