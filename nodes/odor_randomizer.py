@@ -12,6 +12,7 @@ import pickle
 import numpy as np
 import rospy
 from std_msgs.msg import Header
+import yaml
 
 from stimuli.msg import Sequence, Transition, State, DefaultState
 from stimuli.srv import LoadSequenceRequest
@@ -304,6 +305,9 @@ if os.path.isfile(daily_connections_filename):
         generate_odor_to_pin_connections = False
 
     elif c.lower() == 'n':
+        # TODO TODO will this not overwrite anyway? maybe eliminate either this
+        # or the below option, and make clear that the remaining option will
+        # delete existing temporary mappings
         generate_odor_to_pin_connections = True
 
     elif c.lower() == 'd':
@@ -353,6 +357,9 @@ if generate_odor_to_pin_connections:
 
     # TODO improve (?)
     if len(odors) > 1:
+        if rospy.is_shutdown():
+            sys.exit()
+
         with open(daily_connections_filename, 'wb') as f:
             rospy.loginfo('temporarily saving odors and odor->pin mappings ' + \
                 'to ' + daily_connections_filename + ', for reuse in other ' + \
@@ -665,6 +672,51 @@ rospy.loginfo(str(gen.current_t0.to_sec() - t0_sec) + ' seconds')
 
 output_base_dir = '.'
 
+def represent_default_states(defaults):
+    """Returns a representation of a list of stimuli/DefaultState for neat YAML.
+    """
+    high_by_default = dict()
+    for default in defaults:
+        high_by_default[default.pin] = default.high
+    return high_by_default
+
+def represent_rostime(t):
+    """Returns a float of the same Unix epoch time as the input ROS Time.
+    """
+    return t.to_sec()
+
+def represent_state(s):
+    """Return a representation of stimuli/State type for neat YAML saving.
+    """
+    return {'ms_on': s.ms_on, 'ms_off': s.ms_off}
+
+def represent_transition(t):
+    """Return a representation of stimuli/Transition type for neat YAML saving.
+    """
+    return {'time': represent_rostime(t.t), 'new_state': represent_state(t.s)}
+
+def represent_sequence(seq):
+    """Return a representation of stimuli/Sequence type for neat YAML saving.
+    """
+    return {'start': represent_rostime(seq.start),
+            'end': represent_rostime(seq.end),
+            'pins': seq.pins,
+            'transitions': [represent_transition(t) for t in seq.seq]}
+
+def represent_trial_structure(ts):
+    """
+    """
+    ts_representation = []
+    for b in ts:
+        if type(b) is rospy.rostime.Time:
+            ts_representation.append(represent_rostime(b))
+
+        # TODO can i do without the _LoadSequence part? need a diff import?
+        elif type(b) is stimuli.srv._LoadSequence.LoadSequenceRequest:
+            ts_representation.append(represent_sequence(b.seq))
+
+    return ts_representation
+
 # TODO test this
 if save_stimulus_info:
     # TODO get rid of multi_tracker prefix? implement way of managing experiment
@@ -680,7 +732,6 @@ if save_stimulus_info:
         rospy.set_param('multi_tracker/experiment_basename', \
             experiment_basename)
 
-    # TODO do i want to save this if this program is Ctrl-C'd? probably?
     output_dir = os.path.join(output_base_dir, experiment_basename)
     filename = os.path.join(output_dir, experiment_basename + '_stimuli.p')
     rospy.loginfo('Trying to save save stimulus info to ' + filename)
@@ -691,8 +742,27 @@ if save_stimulus_info:
 
     # TODO check / test success
     with open(filename, 'wb') as f:
+        # TODO maybe also save this as a dict?
         pickle.dump((odors2left_pins, odors2right_pins, default_states, \
             trial_structure), f)
+
+    # TODO allow testing this w/o running experiment
+    if save_yaml_stiminfo:
+        # make sure i don't mutate these, since the same variables are passed to
+        # stimuli loader
+        stiminfo = dict()
+        stiminfo['odors2left_pins'] = odors2left_pins
+        stiminfo['odors2right_pins'] = odors2right_pins
+        
+        stiminfo['high_by_default'] = represent_default_states(default_states)
+
+        stiminfo['trial_structure'] = represent_trial_structure(trial_structure)
+
+        yaml_stimfile = os.path.join(output_dir,
+            experiment_basename + '_stimuli.yaml')
+        with open(yaml_stimfile, 'w') as f:
+            yaml.dump(stiminfo, f)
+
 else:
     rospy.logwarn('Not saving generated trial structure ' + \
         '/ pin to odor mappings!')
