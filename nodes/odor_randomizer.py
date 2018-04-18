@@ -97,16 +97,6 @@ rospy.init_node('stimuli')
 # TODO make parameter for this?
 save_stimulus_info = True
 
-# TODO store as effective dilution given flow conditions / mixing ratios?
-'''
-odor_panel = {'paraffin (mock)': (0,),
-              '4-methylcyclohexanol': (-2,),
-              '3-octanol': (-2,)}
-'''
-'''
-odor_panel = {'4-methylcyclohexanol': (-2,),
-              '3-octanol': (-2,)}
-'''
 # TODO load parameter yaml directly? (for testing without ROS running)
 # TODO add defaults for all and document this stuff externally
 params = dict()
@@ -122,13 +112,16 @@ required_params = {
     'olf/post_pulse_ms',
     'olf/prestimulus_delay_s',
     'olf/test_duration_s',
-    'olf/beyond_posttest_s'
+    'olf/beyond_posttest_s',
+    'olf/odors'
 }
 
 # TODO TODO allow option to prespecify odor connections
 # (and maybe another option to indicate whether this or random connections are
 #  desired)
+# TODO option to have first side be (deterministically) either left or right?
 optional_params = {
+    'olf/random_valve_connections': True,
     'olf/balance_normally_flowing': None,
     'olf/left_balance': None,
     'olf/right_balance': None,
@@ -152,6 +145,53 @@ left_balance = params['olf/left_balance']
 right_balance = params['olf/right_balance']
 
 odor_side_order = params['olf/odor_side_order']
+
+random_valve_connections = params['olf/random_valve_connections']
+odors = params['olf/odors']
+
+
+# TODO should one odor in list imply a copy of the balance to be used on the
+# opposite side? (maybe if balance_normally_flowing is false, or something like
+# that?) or just err?
+# TODO test all of these conditions
+# TODO document odors parameter format
+assert len(odors) > 0, 'List of odors can not be empty. See docs for format.'
+for odor in odors:
+    if not (type(odor) is dict) or len(odor.keys()) == 0:
+        raise ValueError("each entry of 'odors' parameter should parse as " +
+            "non-empty dictionary")
+
+    if not 'name' in odor.keys():
+        raise ValueError("Each 'odors' entry needs a key 'name: X'")
+
+    # TODO convert to effective dilution given flow conditions / mixing ratios?
+    if not 'vial_log10_concentration' in odor.keys():
+        raise ValueError("Each 'odors' entry needs a key " +
+            "'vial_log10_concentration: <negative integer or 0>'")
+
+    for k in odor.keys():
+        if k not in {'name', 'vial_log10_concentration',
+            'left_pin', 'right_pin'}:
+
+            raise ValueError('Did not recognize key {} in an entry under ' + 
+                "'odors' parameter.")
+
+if random_valve_connections:
+    for odor in odors:
+        assert not (('left_pin' in odor) or ('right_pin' in odor)), \
+            ('All odors must be randomized if ' +
+            'olf/random_valve_connections is True, so do not specify ' +
+            'left_pin / right_pin for any of the odors in the list under the' +
+            " 'odors' parameter. Otherwise, set olf/random_valve_connections " +
+            'to False.')
+
+else:
+    for odor in odors:
+        assert (('left_pin' in odor) and ('right_pin' in odor)), \
+            ('If not randomizing connections between odor vials and valves, ' +
+             'you must specify left_pin and right_pin under each element in ' +
+             "the parameter 'odors'.")
+
 
 if balance_normally_flowing is None:
     if left_balance is None or right_balance is None:
@@ -322,22 +362,27 @@ else:
     generate_odor_to_pin_connections = True
 
 if generate_odor_to_pin_connections:
+    odor_panel = {'4-methylcyclohexanol': (-2,),
+                  '3-octanol': (-2,)}
+
     rospy.loginfo('did not find saved odors and odor->pin mappings to load')
     #odors = list(odor_panel)
     # TODO put in config file
+
+    # TODO TODO make sure this all also works w/o balance. should be some
+    # options that can make it work w/o.
     if air_balance:
         # TODO maybe rename to 'balance'?
         mock = ('air', 0)
     else:
         mock = ('paraffin oil', 0)
 
-    odors = [('isoamyl acetate', -3), ('paraffin oil', 0)]
+    #odors = [('isoamyl acetate', -3), ('paraffin oil', 0)]
+    odors = [(x['name'], x['vial_log10_concentration']) for x in odors]
     #odors = rospy.get_param('olf/odors', ['UNSPECIFIED_ODOR'])
     # TODO fix
     #odors = list(map(lambda x: (x, np.nan), odors))
     #odors.append(mock)
-
-    print(odors, len(odors), left_pins)
 
     # TODO TODO TODO delete me. hack to enforce the connection K already has + wants
     # since these are zipped w/ odors to determine pairing, and odors never
@@ -347,16 +392,10 @@ if generate_odor_to_pin_connections:
     # might want to load the pickle and make sense of it. actually... is
     # ultimately saved pickle better? check that too. (+ more important to
     # document that one)
-    left_pins = [4, 7]
-    right_pins = [5, 6]
+    if random_valve_connections:
+        left_pins = random.sample(left_pins, len(odors))
+        right_pins = random.sample(right_pins, len(odors))
 
-    # TODO TODO rename to indicate the order is important, or use a different
-    # datatype
-    #left_pins = random.sample(left_pins, len(odors))
-    #right_pins = random.sample(right_pins, len(odors))
-
-    # TODO improve (?)
-    if len(odors) > 1:
         if rospy.is_shutdown():
             sys.exit()
 
@@ -366,6 +405,14 @@ if generate_odor_to_pin_connections:
                 'experiments today.')
             pickle.dump([odors, left_pins, right_pins], f)
             # TODO verify it saved correctly?
+
+    else:
+        # should lead to them being indexed as the odors in the list above
+        # TODO test
+        left_pins = [x['left_pin'] for x in odors] # [4, 7]
+        right_pins = [x['right_pin'] for x in odors] # [5, 6]
+        # TODO TODO rename to indicate the order is important, or use a
+        # different datatype
 
 # TODO
 # randomly break stimuli into groups fitting into the number of 
