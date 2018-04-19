@@ -12,12 +12,14 @@ import pickle
 import numpy as np
 import rospy
 from std_msgs.msg import Header
+import yaml
 
 from stimuli.msg import Sequence, Transition, State, DefaultState
 from stimuli.srv import LoadSequenceRequest
 from stimuli_loader import StimuliLoader
 
 
+# TODO test. this seems to maybe be incorrectly returning True sometimes?
 def get_params(param_dict, required_params, default_params):
     """Fills param_dict values with the values each key has on the ROS parameter
     server. Raises errors if these invalid combinations of parameters are
@@ -96,16 +98,6 @@ rospy.init_node('stimuli')
 # TODO make parameter for this?
 save_stimulus_info = True
 
-# TODO store as effective dilution given flow conditions / mixing ratios?
-'''
-odor_panel = {'paraffin (mock)': (0,),
-              '4-methylcyclohexanol': (-2,),
-              '3-octanol': (-2,)}
-'''
-'''
-odor_panel = {'4-methylcyclohexanol': (-2,),
-              '3-octanol': (-2,)}
-'''
 # TODO load parameter yaml directly? (for testing without ROS running)
 # TODO add defaults for all and document this stuff externally
 params = dict()
@@ -121,14 +113,23 @@ required_params = {
     'olf/post_pulse_ms',
     'olf/prestimulus_delay_s',
     'olf/test_duration_s',
-    'olf/beyond_posttest_s'
+    'olf/beyond_posttest_s',
+    'olf/odors'
 }
 
+# TODO TODO allow option to prespecify odor connections
+# (and maybe another option to indicate whether this or random connections are
+#  desired)
+# TODO option to have first side be (deterministically) either left or right?
 optional_params = {
+    'olf/random_valve_connections': True,
+    'olf/save_yaml_stiminfo': True,
     'olf/balance_normally_flowing': None,
     'olf/left_balance': None,
     'olf/right_balance': None,
-    'olf/odor_side_order': 'alternating'
+    'olf/odor_side_order': 'alternating',
+    'olf/air_balance': None,
+    'olf/solvent_balance': None
 }
 
 get_params(params, required_params, optional_params)
@@ -147,6 +148,55 @@ right_balance = params['olf/right_balance']
 
 odor_side_order = params['olf/odor_side_order']
 
+random_valve_connections = params['olf/random_valve_connections']
+odors = params['olf/odors']
+
+save_yaml_stiminfo = params['olf/save_yaml_stiminfo']
+
+
+# TODO should one odor in list imply a copy of the balance to be used on the
+# opposite side? (maybe if balance_normally_flowing is false, or something like
+# that?) or just err?
+# TODO test all of these conditions
+# TODO document odors parameter format
+assert len(odors) > 0, 'List of odors can not be empty. See docs for format.'
+for odor in odors:
+    if not (type(odor) is dict) or len(odor.keys()) == 0:
+        raise ValueError("each entry of 'olf/odors' parameter should parse as" +
+            " non-empty dictionary")
+
+    if not 'name' in odor.keys():
+        raise ValueError("Each 'olf/odors' entry needs a key 'name: X'")
+
+    # TODO convert to effective dilution given flow conditions / mixing ratios?
+    if not 'vial_log10_concentration' in odor.keys():
+        raise ValueError("Each 'olf/odors' entry needs a key " +
+            "'vial_log10_concentration: <negative integer or 0>'")
+
+    for k in odor.keys():
+        if k not in {'name', 'vial_log10_concentration',
+            'left_pin', 'right_pin'}:
+
+            raise ValueError('Did not recognize key {}'.format(k) +
+                "in an entry under 'olf/odors' parameter.")
+
+if random_valve_connections:
+    for odor in odors:
+        assert not (('left_pin' in odor) or ('right_pin' in odor)), \
+            ('All odors must be randomized if ' +
+            'olf/random_valve_connections is True, so do not specify ' +
+            'left_pin / right_pin for any of the odors in the list under the' +
+            " 'olf/odors' parameter. Otherwise, set " +
+            "'olf/random_valve_connections' to False.")
+
+else:
+    for odor in odors:
+        assert (('left_pin' in odor) and ('right_pin' in odor)), \
+            ('If not randomizing connections between odor vials and valves, ' +
+             'you must specify left_pin and right_pin under each element in ' +
+             "the parameter 'olf/odors'.")
+
+
 if balance_normally_flowing is None:
     if left_balance is None or right_balance is None:
         raise ValueError('need to specify balance pins (olf/left_balance and ' +
@@ -162,6 +212,36 @@ else:
 if not (odor_side_order == 'alternating' or odor_side_order == 'random'):
     raise ValueError("olf/odor_side_order must be either 'random' or " + 
         "'alternating'")
+
+# TODO maybe refactor if to be more straightforward / efficient
+# TODO test
+if not (params['olf/air_balance'] is None or
+    params['olf/solvent_balance'] is None):
+
+    # should be negation of xor
+    if ((params['olf/air_balance'] and params['olf/solvent_balance']) or
+        not (params['olf/air_balance'] or params['olf/solvent_balance'])):
+
+        raise ValueError('olf/air_balance and olf/solvent_balance ' + 
+            'are redundant. If both are set, they must be consistent. ' + 
+            'Only one can be True.')
+
+    else:
+        # they are consistent. either could be used to set air_balance.
+        air_balance = params['olf/air_balance']
+
+elif (params['olf/air_balance'] is None and
+      params['olf/solvent_balance'] is None):
+    
+    # the default is olf/air_balance = True
+    air_balance = True
+
+elif params['olf/solvent_balance'] is None:
+    air_balance = params['olf/air_balance']
+
+elif params['olf/air_balance'] is None:
+    air_balance = not params['olf/solvent_balance']
+    
 
 ###############################################################################
 # Parameters unique to experiments with reinforcement (training)
@@ -256,8 +336,11 @@ if ((have_testonly_params and have_training_params) or
 daily_connections_filename = '.' + time.strftime('%Y%m%d', time.localtime()) + \
     '_mappings.p'
 if os.path.isfile(daily_connections_filename):
+    '''
     c = raw_input('Found saved mappings from today. Load them? ' + \
         '([y]es/[n]o/[d]elete them.')
+    '''
+    c = 'd'
     if c.lower() == 'y':
         rospy.loginfo('loading odors and odor->pin mappings from ' + \
             daily_connections_filename)
@@ -266,6 +349,9 @@ if os.path.isfile(daily_connections_filename):
         generate_odor_to_pin_connections = False
 
     elif c.lower() == 'n':
+        # TODO TODO will this not overwrite anyway? maybe eliminate either this
+        # or the below option, and make clear that the remaining option will
+        # delete existing temporary mappings
         generate_odor_to_pin_connections = True
 
     elif c.lower() == 'd':
@@ -283,26 +369,43 @@ if generate_odor_to_pin_connections:
     rospy.loginfo('did not find saved odors and odor->pin mappings to load')
     #odors = list(odor_panel)
     # TODO put in config file
-    mock = ('paraffin (mock)', 0)
-    odors = [('4-methylcyclohexanol', -2), ('3-octanol', -2)]
-    #odors = rospy.get_param('olf/odors', ['UNSPECIFIED_ODOR'])
-    # TODO fix
-    #odors = list(map(lambda x: (x, np.nan), odors))
-    #odors.append(mock)
 
-    print(odors, len(odors), left_pins)
+    # TODO TODO make sure this all also works w/o balance. should be some
+    # options that can make it work w/o.
+    if air_balance:
+        # TODO maybe rename to 'balance'?
+        mock = ('air', 0)
+    else:
+        mock = ('paraffin oil', 0)
 
-    left_pins = random.sample(left_pins, len(odors))
-    right_pins = random.sample(right_pins, len(odors))
+    #odors = [('isoamyl acetate', -2), ('paraffin oil', 0)]
+    odors = [(x['name'], x['vial_log10_concentration']) for x in odors]
 
-    # TODO improve (?)
-    if len(odors) > 1:
+    # TODO document this behavior (or explicitly save mappings) for people who
+    # might want to load the pickle and make sense of it. actually... is
+    # ultimately saved pickle better? check that too. (+ more important to
+    # document that one)
+    if random_valve_connections:
+        left_pins = random.sample(left_pins, len(odors))
+        right_pins = random.sample(right_pins, len(odors))
+
+        if rospy.is_shutdown():
+            sys.exit()
+
         with open(daily_connections_filename, 'wb') as f:
             rospy.loginfo('temporarily saving odors and odor->pin mappings ' + \
                 'to ' + daily_connections_filename + ', for reuse in other ' + \
                 'experiments today.')
             pickle.dump([odors, left_pins, right_pins], f)
             # TODO verify it saved correctly?
+
+    else:
+        # should lead to them being indexed as the odors in the list above
+        # TODO test
+        left_pins = [x['left_pin'] for x in odors] # [4, 7]
+        right_pins = [x['right_pin'] for x in odors] # [5, 6]
+        # TODO TODO rename to indicate the order is important, or use a
+        # different datatype
 
 # TODO
 # randomly break stimuli into groups fitting into the number of 
@@ -316,6 +419,8 @@ if generate_odor_to_pin_connections:
 # TODO open a new terminal for these / GUI, to make it not get hard to see among
 # mess printed to terminal? (do I still care it is logged through ROS
 # facilities?)
+# TODO TODO TODO maybe only generate this from odors2<X>_pins, to minimize risk
+# of divergence through code changes
 rospy.loginfo('Left pins:')
 for pin, odor_pair in sorted(zip(left_pins, odors), key=lambda x: x[0]):
     rospy.loginfo(str(pin) + ' -> ' + str(odor_pair))
@@ -334,9 +439,10 @@ else:
     # TODO rename (because sometimes we don't have any training trials?)
     reinforced, unreinforced = random.sample(odors, 2)
 
-if len(odors) > 1 and training_blocks != 0:
-    rospy.loginfo('pairing shock with '  + str(reinforced))
-    rospy.loginfo('unpaired ' + str(unreinforced))
+if have_training_params:
+	if len(odors) > 1 and training_blocks != 0:
+	    rospy.loginfo('pairing shock with '  + str(reinforced))
+	    rospy.loginfo('unpaired ' + str(unreinforced))
 
 # include this in optional parameter dict above?
 # TODO also only start recording when this is done? (when using this with
@@ -347,8 +453,22 @@ wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
     raw_input('Press Enter when the odor vials are connected.')
 
+
+# TODO TODO TODO make sure randomness isn't broken here, and that the mappings
+# instructing the user are those ultimately followed and recorded in the trial
+# structure!
 odors2left_pins = dict(zip(odors, left_pins))
 odors2right_pins = dict(zip(odors, right_pins))
+
+# TODO delete me (for debugging)
+o1 = ('isoamyl acetate', -2)
+o2 = ('paraffin oil', 0)
+o1_pins = [p for o, p in odors2left_pins.items() if o == o1] + \
+    [p for o, p in odors2right_pins.items() if o == o1]
+o2_pins = [p for o, p in odors2left_pins.items() if o == o2] + \
+    [p for o, p in odors2right_pins.items() if o == o2]
+print('PINS THAT YOU SHOULD HAVE BEEN TOLD TO CONNECT TO {}: {}'.format(o1, o1_pins))
+print('PINS THAT YOU SHOULD HAVE BEEN TOLD TO CONNECT TO {}: {}'.format(o2, o2_pins))
 
 ###############################################################################
 
@@ -540,16 +660,19 @@ if have_training_params:
     epoch_labels = ['test'] + ['train'] * training_blocks + ['test']
 
 elif have_testonly_params:
+    # TODO looks like case where testing_blocks = 1 might have extra long
+    # posttest period (=beyond_post_test_s + inter_test_interval_s). fix
     trial_structure = [gen.delay(prestimulus_delay_s)] + \
                       ((flatten([[f(), gen.delay(inter_test_interval_s)] for f
                         in [gen.test] * (testing_blocks - 1)]) + \
-                      [gen.test()]) if training_blocks > 0 else []) + \
-                      [gen.test(),
-                       gen.delay(beyond_posttest_s)]
+                      [gen.test()]) if testing_blocks > 0 else []) + \
+                      [gen.delay(beyond_posttest_s)]
     epoch_labels = ['test']  * testing_blocks
 
 # TODO even if not printed to /rosout, is this saved by default?
+# (seems like no)
 rospy.logdebug('trial_structure', trial_structure)
+rospy.logdebug('epoch_labels', epoch_labels)
 
 # low_pins = pins that default to low (0v)
 # high_pins = pins that default to high (5v)
@@ -587,6 +710,55 @@ rospy.loginfo(str(gen.current_t0.to_sec() - t0_sec) + ' seconds')
 
 output_base_dir = '.'
 
+def represent_default_states(defaults):
+    """Returns a representation of a list of stimuli/DefaultState for neat YAML.
+    """
+    high_by_default = dict()
+    for default in defaults:
+        high_by_default[default.pin] = default.high
+    return high_by_default
+
+def represent_rostime(t):
+    """Returns a float of the same Unix epoch time as the input ROS Time.
+    """
+    return t.to_sec()
+
+def represent_state(s):
+    """Return a representation of stimuli/State type for neat YAML saving.
+    """
+    return {'ms_on': s.ms_on, 'ms_off': s.ms_off}
+
+def represent_transition(t):
+    """Return a representation of stimuli/Transition type for neat YAML saving.
+    """
+    return {'time': represent_rostime(t.t), 'new_state': represent_state(t.s)}
+
+def represent_sequence(seq):
+    """Return a representation of stimuli/Sequence type for neat YAML saving.
+    """
+    return {'start': represent_rostime(seq.start),
+            'end': represent_rostime(seq.end),
+            'pins': seq.pins,
+            'transitions': [represent_transition(t) for t in seq.seq]}
+
+def represent_trial_structure(ts):
+    """
+    """
+    ts_representation = []
+    for b in ts:
+        if type(b) is rospy.rostime.Time:
+            ts_representation.append(represent_rostime(b))
+
+        # TODO can i do without the _LoadSequence part? need a diff import?
+        #elif type(b) is stimuli.srv._LoadSequence.LoadSequenceRequest:
+        elif type(b) is LoadSequenceRequest:
+            ts_representation.append(represent_sequence(b.seq))
+
+        else:
+            raise ValueError('unexpected type in trial structure: {}'.format(type(b)))
+
+    return ts_representation
+
 # TODO test this
 if save_stimulus_info:
     # TODO get rid of multi_tracker prefix? implement way of managing experiment
@@ -602,7 +774,6 @@ if save_stimulus_info:
         rospy.set_param('multi_tracker/experiment_basename', \
             experiment_basename)
 
-    # TODO do i want to save this if this program is Ctrl-C'd? probably?
     output_dir = os.path.join(output_base_dir, experiment_basename)
     filename = os.path.join(output_dir, experiment_basename + '_stimuli.p')
     rospy.loginfo('Trying to save save stimulus info to ' + filename)
@@ -613,8 +784,27 @@ if save_stimulus_info:
 
     # TODO check / test success
     with open(filename, 'wb') as f:
+        # TODO maybe also save this as a dict?
         pickle.dump((odors2left_pins, odors2right_pins, default_states, \
             trial_structure), f)
+
+    # TODO allow testing this w/o running experiment
+    if save_yaml_stiminfo:
+        # make sure i don't mutate these, since the same variables are passed to
+        # stimuli loader
+        stiminfo = dict()
+        stiminfo['odors2left_pins'] = odors2left_pins
+        stiminfo['odors2right_pins'] = odors2right_pins
+        
+        stiminfo['high_by_default'] = represent_default_states(default_states)
+
+        stiminfo['trial_structure'] = represent_trial_structure(trial_structure)
+
+        yaml_stimfile = os.path.join(output_dir,
+            experiment_basename + '_stimuli.yaml')
+        with open(yaml_stimfile, 'w') as f:
+            yaml.dump(stiminfo, f)
+
 else:
     rospy.logwarn('Not saving generated trial structure ' + \
         '/ pin to odor mappings!')

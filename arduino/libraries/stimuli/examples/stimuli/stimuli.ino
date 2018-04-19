@@ -1,5 +1,5 @@
 
-#include <stimuli.h>
+#include <stimuli.hpp>
 
 using namespace stim;
 
