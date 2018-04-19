@@ -19,6 +19,7 @@ from stimuli.srv import LoadSequenceRequest
 from stimuli_loader import StimuliLoader
 
 
+# TODO test. this seems to maybe be incorrectly returning True sometimes?
 def get_params(param_dict, required_params, default_params):
     """Fills param_dict values with the values each key has on the ROS parameter
     server. Raises errors if these invalid combinations of parameters are
@@ -122,6 +123,7 @@ required_params = {
 # TODO option to have first side be (deterministically) either left or right?
 optional_params = {
     'olf/random_valve_connections': True,
+    'olf/save_yaml_stiminfo': True,
     'olf/balance_normally_flowing': None,
     'olf/left_balance': None,
     'olf/right_balance': None,
@@ -148,6 +150,8 @@ odor_side_order = params['olf/odor_side_order']
 
 random_valve_connections = params['olf/random_valve_connections']
 odors = params['olf/odors']
+
+save_yaml_stiminfo = params['olf/save_yaml_stiminfo']
 
 
 # TODO should one odor in list imply a copy of the balance to be used on the
@@ -417,7 +421,6 @@ if generate_odor_to_pin_connections:
 # facilities?)
 # TODO TODO TODO maybe only generate this from odors2<X>_pins, to minimize risk
 # of divergence through code changes
-'''
 rospy.loginfo('Left pins:')
 for pin, odor_pair in sorted(zip(left_pins, odors), key=lambda x: x[0]):
     rospy.loginfo(str(pin) + ' -> ' + str(odor_pair))
@@ -425,7 +428,6 @@ for pin, odor_pair in sorted(zip(left_pins, odors), key=lambda x: x[0]):
 rospy.loginfo('Right pins:')
 for pin, odor_pair in sorted(zip(right_pins, odors), key=lambda x: x[0]):
     rospy.loginfo(str(pin) + ' -> ' + str(odor_pair))
-'''
 
 # TODO how to support no mock? (potentially just 1 odor in total)
 # TODO fix hack
@@ -748,8 +750,12 @@ def represent_trial_structure(ts):
             ts_representation.append(represent_rostime(b))
 
         # TODO can i do without the _LoadSequence part? need a diff import?
-        elif type(b) is stimuli.srv._LoadSequence.LoadSequenceRequest:
+        #elif type(b) is stimuli.srv._LoadSequence.LoadSequenceRequest:
+        elif type(b) is LoadSequenceRequest:
             ts_representation.append(represent_sequence(b.seq))
+
+        else:
+            raise ValueError('unexpected type in trial structure: {}'.format(type(b)))
 
     return ts_representation
 
