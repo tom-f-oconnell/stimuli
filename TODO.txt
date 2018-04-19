@@ -5,6 +5,10 @@
 - use a service / another flag in return of defaults to only proceed with
   callbacks after parameters are all set?
 
+- if i'm going to typically only use the randomizer once at the beginning of the
+  day, make another script to just call that in advance, so I don't need flies
+  loaded to make connections?
+
 POWER CYCLING ARDUINO SEEMS LIKE IT MIGHT NOT RESET VALVES NOW (it should)
 - is this an electronics issue w/ Wilson lab MOSFET driver? mechanism,
   otherwise?  my imagination?
