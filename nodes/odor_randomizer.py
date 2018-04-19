@@ -331,7 +331,17 @@ if ((have_testonly_params and have_training_params) or
 
 ###############################################################################
 
-if random_valve_connections:
+odors = [(x['name'], x['vial_log10_concentration']) for x in odors]
+
+if not random_valve_connections:
+    # should lead to them being indexed as the odors in the list above
+    # TODO test
+    left_pins = [x['left_pin'] for x in odors] # [4, 7]
+    right_pins = [x['right_pin'] for x in odors] # [5, 6]
+    # TODO TODO rename to indicate the order is important, or use a
+    # different datatype
+
+else:
     # TODO maybe just reset at like 5am or check for experiments in last few
     # hours, to use the same mappings after midnight, but in the same workday
     daily_connections_filename = '.' + time.strftime('%Y%m%d',
@@ -361,30 +371,26 @@ if random_valve_connections:
         else:
             raise ValueError('invalid choice')
 
-else:
-    generate_odor_to_pin_connections = True
-
-if generate_odor_to_pin_connections:
-    rospy.loginfo('did not find saved odors and odor->pin mappings to load')
-    #odors = list(odor_panel)
-    # TODO put in config file
-
-    # TODO TODO make sure this all also works w/o balance. should be some
-    # options that can make it work w/o.
-    if air_balance:
-        # TODO maybe rename to 'balance'?
-        mock = ('air', 0)
     else:
-        mock = ('paraffin oil', 0)
+        generate_odor_to_pin_connections = True
 
-    #odors = [('isoamyl acetate', -2), ('paraffin oil', 0)]
-    odors = [(x['name'], x['vial_log10_concentration']) for x in odors]
+    if generate_odor_to_pin_connections:
+        rospy.loginfo('did not find saved odors and odor->pin mappings to load')
+        #odors = list(odor_panel)
+        # TODO put in config file
 
-    # TODO document this behavior (or explicitly save mappings) for people who
-    # might want to load the pickle and make sense of it. actually... is
-    # ultimately saved pickle better? check that too. (+ more important to
-    # document that one)
-    if random_valve_connections:
+        # TODO TODO make sure this all also works w/o balance. should be some
+        # options that can make it work w/o.
+        if air_balance:
+            # TODO maybe rename to 'balance'?
+            mock = ('air', 0)
+        else:
+            mock = ('paraffin oil', 0)
+
+        # TODO document this behavior (or explicitly save mappings) for people
+        # who might want to load the pickle and make sense of it. actually... is
+        # ultimately saved pickle better? check that too. (+ more important to
+        # document that one)
         left_pins = random.sample(left_pins, len(odors))
         right_pins = random.sample(right_pins, len(odors))
 
@@ -397,14 +403,6 @@ if generate_odor_to_pin_connections:
                 'experiments today.')
             pickle.dump([odors, left_pins, right_pins], f)
             # TODO verify it saved correctly?
-
-    else:
-        # should lead to them being indexed as the odors in the list above
-        # TODO test
-        left_pins = [x['left_pin'] for x in odors] # [4, 7]
-        right_pins = [x['right_pin'] for x in odors] # [5, 6]
-        # TODO TODO rename to indicate the order is important, or use a
-        # different datatype
 
 # TODO
 # randomly break stimuli into groups fitting into the number of 
@@ -459,15 +457,15 @@ if wait_for_keypress:
 odors2left_pins = dict(zip(odors, left_pins))
 odors2right_pins = dict(zip(odors, right_pins))
 
-# TODO delete me (for debugging)
-o1 = ('isoamyl acetate', -2)
-o2 = ('paraffin oil', 0)
+'''
+# TODO turn into a test?
 o1_pins = [p for o, p in odors2left_pins.items() if o == o1] + \
     [p for o, p in odors2right_pins.items() if o == o1]
 o2_pins = [p for o, p in odors2left_pins.items() if o == o2] + \
     [p for o, p in odors2right_pins.items() if o == o2]
 print('PINS THAT YOU SHOULD HAVE BEEN TOLD TO CONNECT TO {}: {}'.format(o1, o1_pins))
 print('PINS THAT YOU SHOULD HAVE BEEN TOLD TO CONNECT TO {}: {}'.format(o2, o2_pins))
+'''
 
 ###############################################################################
 
@@ -561,14 +559,13 @@ class StimuliGenerator:
             # indicates whether the current training epoch will use the
             # reinforced_odor or the unreinforced_odor
             if self.current_side_is_left:
+                # TODO test
                 if one_pin_shock:
-                    rospy.loginfo('ONE PIN SHOCK (in shock_transitions)')
                     # TODO what happens on the Arduino if it is given a
                     # duplicate of a transition? does it behave appropriately or
                     # fail?
                     return [all_shock], [transition]
                 else:
-                    rospy.loginfo('TWO PIN SHOCK')
                     return [left_shock, right_shock], [transition, transition]
             else:
                 return [], []
