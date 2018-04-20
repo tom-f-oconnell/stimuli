@@ -149,7 +149,7 @@ right_balance = params['olf/right_balance']
 odor_side_order = params['olf/odor_side_order']
 
 random_valve_connections = params['olf/random_valve_connections']
-odors = params['olf/odors']
+odors_and_pins = params['olf/odors']
 
 save_yaml_stiminfo = params['olf/save_yaml_stiminfo']
 
@@ -159,8 +159,9 @@ save_yaml_stiminfo = params['olf/save_yaml_stiminfo']
 # that?) or just err?
 # TODO test all of these conditions
 # TODO document odors parameter format
-assert len(odors) > 0, 'List of odors can not be empty. See docs for format.'
-for odor in odors:
+assert len(odors_and_pins) > 0, \
+    'List of odors can not be empty. See docs for format.'
+for odor in odors_and_pins:
     if not (type(odor) is dict) or len(odor.keys()) == 0:
         raise ValueError("each entry of 'olf/odors' parameter should parse as" +
             " non-empty dictionary")
@@ -180,8 +181,11 @@ for odor in odors:
             raise ValueError('Did not recognize key {}'.format(k) +
                 "in an entry under 'olf/odors' parameter.")
 
+# TODO TODO TODO infer that random_valve_connections should be false if it is
+# not specified, and if left_pin + right_pin are specified for each odor in the
+# list
 if random_valve_connections:
-    for odor in odors:
+    for odor in odors_and_pins:
         assert not (('left_pin' in odor) or ('right_pin' in odor)), \
             ('All odors must be randomized if ' +
             'olf/random_valve_connections is True, so do not specify ' +
@@ -190,7 +194,7 @@ if random_valve_connections:
             "'olf/random_valve_connections' to False.")
 
 else:
-    for odor in odors:
+    for odor in odors_and_pins:
         assert (('left_pin' in odor) and ('right_pin' in odor)), \
             ('If not randomizing connections between odor vials and valves, ' +
              'you must specify left_pin and right_pin under each element in ' +
@@ -331,13 +335,13 @@ if ((have_testonly_params and have_training_params) or
 
 ###############################################################################
 
-odors = [(x['name'], x['vial_log10_concentration']) for x in odors]
+odors = [(x['name'], x['vial_log10_concentration']) for x in odors_and_pins]
 
 if not random_valve_connections:
     # should lead to them being indexed as the odors in the list above
     # TODO test
-    left_pins = [x['left_pin'] for x in odors] # [4, 7]
-    right_pins = [x['right_pin'] for x in odors] # [5, 6]
+    left_pins = [x['left_pin'] for x in odors_and_pins]
+    right_pins = [x['right_pin'] for x in odors_and_pins]
     # TODO TODO rename to indicate the order is important, or use a
     # different datatype
 
