@@ -124,11 +124,23 @@ required_params = {
 optional_params = {
     'olf/random_valve_connections': True,
     'olf/save_yaml_stiminfo': True,
+
+    # How to set this would seem to be a matter of whether valves and their
+    # control or odor vials are more valuable to you.
+    # If this is True, and you're using three port valves (common, NO, and NC)
+    # then it implies that EITHER the NO OR the NC port of each valve should be
+    # stopped. If balance_normally_flowing is also True, then the normally
+    # closed (NC) port of each balance valve should be stopped.
+    # TODO make <left/right>_balance and related cause error if this is False
+    # TODO is this redundant w/ anything?
+    'olf/dedicated_valves_for_balances': True,
     'olf/balance_normally_flowing': None,
     'olf/left_balance': None,
     'olf/right_balance': None,
     'olf/odor_side_order': 'alternating',
     'olf/air_balance': None,
+    # TODO TODO allow further types of balances. probably just use one parameter
+    # total with a checked str param, not a flag for each
     'olf/solvent_balance': None
 }
 
@@ -345,6 +357,10 @@ if not random_valve_connections:
     # TODO TODO rename to indicate the order is important, or use a
     # different datatype
 
+    # TODO TODO fix
+    if len(odors) == 1 and params['olf/dedicated_valves_for_balances']:
+        raise NotImplementedError
+
 else:
     # TODO maybe just reset at like 5am or check for experiments in last few
     # hours, to use the same mappings after midnight, but in the same workday
@@ -390,6 +406,15 @@ else:
             mock = ('air', 0)
         else:
             mock = ('paraffin oil', 0)
+
+        # TODO accomodate other kinds of balances?
+        if len(odors) == 1 and params['olf/dedicated_valves_for_balances']:
+            odors.append(mock)
+            # TODO TODO TODO make sure that if I am otherwise enforcing
+            # everything needing to be either random or not, that this does not
+            # create an exception, where only the inferred mock is assigned a
+            # random odor pin.  (just make sure to fail if existing single odor
+            # is given a specific pin)
 
         # TODO document this behavior (or explicitly save mappings) for people
         # who might want to load the pickle and make sense of it. actually... is
