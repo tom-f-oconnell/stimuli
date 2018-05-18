@@ -131,17 +131,10 @@ optional_params = {
     # then it implies that EITHER the NO OR the NC port of each valve should be
     # stopped. If balance_normally_flowing is also True, then the normally
     # closed (NC) port of each balance valve should be stopped.
-    # TODO make <left/right>_balance and related cause error if this is False
-    # TODO is this redundant w/ anything?
-    'olf/dedicated_valves_for_balances': True,
     'olf/balance_normally_flowing': None,
     'olf/left_balance': None,
     'olf/right_balance': None,
     'olf/odor_side_order': 'alternating',
-    'olf/air_balance': None,
-    # TODO TODO allow further types of balances. probably just use one parameter
-    # total with a checked str param, not a flag for each
-    'olf/solvent_balance': None
 }
 
 get_params(params, required_params, optional_params)
@@ -229,35 +222,6 @@ if not (odor_side_order == 'alternating' or odor_side_order == 'random'):
     raise ValueError("olf/odor_side_order must be either 'random' or " + 
         "'alternating'")
 
-# TODO maybe refactor if to be more straightforward / efficient
-# TODO test
-if not (params['olf/air_balance'] is None or
-    params['olf/solvent_balance'] is None):
-
-    # should be negation of xor
-    if ((params['olf/air_balance'] and params['olf/solvent_balance']) or
-        not (params['olf/air_balance'] or params['olf/solvent_balance'])):
-
-        raise ValueError('olf/air_balance and olf/solvent_balance ' + 
-            'are redundant. If both are set, they must be consistent. ' + 
-            'Only one can be True.')
-
-    else:
-        # they are consistent. either could be used to set air_balance.
-        air_balance = params['olf/air_balance']
-
-elif (params['olf/air_balance'] is None and
-      params['olf/solvent_balance'] is None):
-    
-    # the default is olf/air_balance = True
-    air_balance = True
-
-elif params['olf/solvent_balance'] is None:
-    air_balance = params['olf/air_balance']
-
-elif params['olf/air_balance'] is None:
-    air_balance = not params['olf/solvent_balance']
-    
 
 # TODO TODO TODO print out any unrecognized params in some namespace(s)
 # maybe just olf and zap, maybe consolidate
@@ -351,19 +315,6 @@ if ((have_testonly_params and have_training_params) or
 
 odors = [(x['name'], x['vial_log10_concentration']) for x in odors_and_pins]
 
-# TODO TODO make sure this all also works w/o balance. should be some
-# options that can make it work w/o.
-if air_balance:
-    # TODO maybe rename to 'balance'?
-    mock = ('air', 0)
-else:
-    mock = ('paraffin oil', 0)
-
-# TODO accomodate other kinds of balances?
-if len(odors) == 1 and params['olf/dedicated_valves_for_balances']:
-    odors.append(mock)
-
-
 if not random_valve_connections:
     # should lead to them being indexed as the odors in the list above
     # TODO test
@@ -371,23 +322,6 @@ if not random_valve_connections:
     right_pins = [x['right_pin'] for x in odors_and_pins]
     # TODO TODO rename to indicate the order is important, or use a
     # different datatype
-
-    # TODO TODO fix
-    # maybe just specify balance odor name separately? optional flag in odors
-    # list?
-    if len(odors) == 2 and params['olf/dedicated_valves_for_balances']:
-        # TODO implement option to suppress warning?
-        # TODO TODO test that training / testing blocks generated after this
-        # path are reasoanble
-        # TODO one way would be to have two vials off of the balance, and there
-        # could be an option for that, but that would probably generate slightly
-        # less noise on that side, considering it would only be one valve
-        # actuated
-        # TODO TODO TODO allow some configuration to allow one odor specified in
-        # odor list to be presented on both sides, for no-learning, zero discrim
-        # control. how best?
-        rospy.logwarn('Only one odor. When presented on one side, two valves' +
-            ' will click, but on the opposite side, no valves will. Asymmetry.')
 
 else:
     # TODO maybe just reset at like 5am or check for experiments in last few
@@ -424,25 +358,20 @@ else:
 
     if generate_odor_to_pin_connections:
         rospy.loginfo('did not find saved odors and odor->pin mappings to load')
-        #odors = list(odor_panel)
-        # TODO TODO TODO make sure that if I am otherwise enforcing
-        # everything needing to be either random or not, that this does not
-        # create an exception, where only the inferred mock is assigned a
-        # random odor pin.  (just make sure to fail if existing single odor
-        # is given a specific pin)
-
         # TODO document this behavior (or explicitly save mappings) for people
         # who might want to load the pickle and make sense of it. actually... is
         # ultimately saved pickle better? check that too. (+ more important to
         # document that one)
 
-        # - 1 because the mock was added to odors, but it just gets the balance
-        # pins. maybe handle differently.
-        left_pins = random.sample(left_pins, len(odors) - 1)
-        right_pins = random.sample(right_pins, len(odors) - 1)
+        # without replacement
+        left_pins = random.sample(left_pins, len(odors))
+        right_pins = random.sample(right_pins, len(odors))
 
         if rospy.is_shutdown():
             sys.exit()
+            # TODO need to also delete if gets shutdown prematurely? register on
+            # exit that checks some success flag or something? or gets cancelled
+            # during a successful exit?
 
         with open(daily_connections_filename, 'wb') as f:
             rospy.loginfo('temporarily saving odors and odor->pin mappings ' + \
@@ -473,12 +402,23 @@ rospy.loginfo('Right pins:')
 for pin, odor_pair in sorted(zip(right_pins, odors), key=lambda x: x[0]):
     rospy.loginfo(str(pin) + ' -> ' + str(odor_pair))
 
-# TODO how to support no mock? (potentially just 1 odor in total)
 # TODO fix hack
 if len(odors) == 1:
     reinforced = odors[0]
     unreinforced = None
-    rospy.logwarn('not pulsing mock on opposite side')
+    # TODO implement option to suppress warning?
+    # TODO TODO test that training / testing blocks generated after this
+    # path are reasoanble
+    # TODO one way would be to have two vials off of the balance, and there
+    # could be an option for that, but that would probably generate slightly
+    # less noise on that side, considering it would only be one valve
+    # actuated
+    # TODO TODO TODO allow some configuration to allow one odor specified in
+    # odor list to be presented on both sides, for no-learning, zero discrim
+    # control. how best?
+    rospy.logwarn('Only one odor. When presented on one side, two valves' +
+        ' will click, but on the opposite side, no valves will. Asymmetry.')
+
 else:
     # TODO rename (because sometimes we don't have any training trials?)
     reinforced, unreinforced = random.sample(odors, 2)
@@ -798,7 +738,8 @@ def represent_trial_structure(ts):
             ts_representation.append(represent_sequence(b.seq))
 
         else:
-            raise ValueError('unexpected type in trial structure: {}'.format(type(b)))
+            raise ValueError('unexpected type in trial structure: ' +
+                '{}'.format(type(b)))
 
     return ts_representation
 
