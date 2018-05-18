@@ -259,6 +259,8 @@ elif params['olf/air_balance'] is None:
     air_balance = not params['olf/solvent_balance']
     
 
+# TODO TODO TODO print out any unrecognized params in some namespace(s)
+# maybe just olf and zap, maybe consolidate
 ###############################################################################
 # Parameters unique to experiments with reinforcement (training)
 ###############################################################################
@@ -349,6 +351,19 @@ if ((have_testonly_params and have_training_params) or
 
 odors = [(x['name'], x['vial_log10_concentration']) for x in odors_and_pins]
 
+# TODO TODO make sure this all also works w/o balance. should be some
+# options that can make it work w/o.
+if air_balance:
+    # TODO maybe rename to 'balance'?
+    mock = ('air', 0)
+else:
+    mock = ('paraffin oil', 0)
+
+# TODO accomodate other kinds of balances?
+if len(odors) == 1 and params['olf/dedicated_valves_for_balances']:
+    odors.append(mock)
+
+
 if not random_valve_connections:
     # should lead to them being indexed as the odors in the list above
     # TODO test
@@ -358,8 +373,21 @@ if not random_valve_connections:
     # different datatype
 
     # TODO TODO fix
-    if len(odors) == 1 and params['olf/dedicated_valves_for_balances']:
-        raise NotImplementedError
+    # maybe just specify balance odor name separately? optional flag in odors
+    # list?
+    if len(odors) == 2 and params['olf/dedicated_valves_for_balances']:
+        # TODO implement option to suppress warning?
+        # TODO TODO test that training / testing blocks generated after this
+        # path are reasoanble
+        # TODO one way would be to have two vials off of the balance, and there
+        # could be an option for that, but that would probably generate slightly
+        # less noise on that side, considering it would only be one valve
+        # actuated
+        # TODO TODO TODO allow some configuration to allow one odor specified in
+        # odor list to be presented on both sides, for no-learning, zero discrim
+        # control. how best?
+        rospy.logwarn('Only one odor. When presented on one side, two valves' +
+            ' will click, but on the opposite side, no valves will. Asymmetry.')
 
 else:
     # TODO maybe just reset at like 5am or check for experiments in last few
@@ -397,31 +425,21 @@ else:
     if generate_odor_to_pin_connections:
         rospy.loginfo('did not find saved odors and odor->pin mappings to load')
         #odors = list(odor_panel)
-        # TODO put in config file
-
-        # TODO TODO make sure this all also works w/o balance. should be some
-        # options that can make it work w/o.
-        if air_balance:
-            # TODO maybe rename to 'balance'?
-            mock = ('air', 0)
-        else:
-            mock = ('paraffin oil', 0)
-
-        # TODO accomodate other kinds of balances?
-        if len(odors) == 1 and params['olf/dedicated_valves_for_balances']:
-            odors.append(mock)
-            # TODO TODO TODO make sure that if I am otherwise enforcing
-            # everything needing to be either random or not, that this does not
-            # create an exception, where only the inferred mock is assigned a
-            # random odor pin.  (just make sure to fail if existing single odor
-            # is given a specific pin)
+        # TODO TODO TODO make sure that if I am otherwise enforcing
+        # everything needing to be either random or not, that this does not
+        # create an exception, where only the inferred mock is assigned a
+        # random odor pin.  (just make sure to fail if existing single odor
+        # is given a specific pin)
 
         # TODO document this behavior (or explicitly save mappings) for people
         # who might want to load the pickle and make sense of it. actually... is
         # ultimately saved pickle better? check that too. (+ more important to
         # document that one)
-        left_pins = random.sample(left_pins, len(odors))
-        right_pins = random.sample(right_pins, len(odors))
+
+        # - 1 because the mock was added to odors, but it just gets the balance
+        # pins. maybe handle differently.
+        left_pins = random.sample(left_pins, len(odors) - 1)
+        right_pins = random.sample(right_pins, len(odors) - 1)
 
         if rospy.is_shutdown():
             sys.exit()
