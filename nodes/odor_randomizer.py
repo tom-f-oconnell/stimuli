@@ -510,8 +510,13 @@ class StimuliGenerator:
                 pins = [odors2left_pins[reinforced], \
                     odors2right_pins[reinforced]]
             else:
-                pins = [odors2left_pins[unreinforced], \
-                    odors2right_pins[unreinforced]]
+                # TODO TODO consider erring if unreinforced is None
+                if not unreinforced is None:
+                    pins = [odors2left_pins[unreinforced], \
+                        odors2right_pins[unreinforced]]
+                else:
+                    # this work?
+                    pins = []
 
         else:
             if self.current_side_is_left:
@@ -527,6 +532,7 @@ class StimuliGenerator:
                 else:
                     pins = [odors2right_pins[reinforced]]
 
+        # work for zero length pins?
         for p in pins:
             expanded_pins.extend(len(transition) * [p])
             seq.extend(transition)
