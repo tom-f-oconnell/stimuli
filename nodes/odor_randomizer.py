@@ -181,7 +181,7 @@ for odor in odors_and_pins:
 
     for k in odor.keys():
         if k not in {'name', 'vial_log10_concentration',
-            'left_pin', 'right_pin'}:
+            'left_pin', 'right_pin', 'against_itself'}:
 
             raise ValueError('Did not recognize key {}'.format(k) +
                 "in an entry under 'olf/odors' parameter.")
@@ -402,28 +402,46 @@ rospy.loginfo('Right pins:')
 for pin, odor_pair in sorted(zip(right_pins, odors), key=lambda x: x[0]):
     rospy.loginfo(str(pin) + ' -> ' + str(odor_pair))
 
-# TODO fix hack
 if len(odors) == 1:
+    # TODO if elsewhere i've decided that it is desirable to be able to specify
+    # more odor pairings than can be tested in one experiment in config, i need
+    # to make that handling consistent with this case.
     reinforced = odors[0]
-    unreinforced = None
-    # TODO implement option to suppress warning?
-    # TODO TODO test that training / testing blocks generated after this
-    # path are reasoanble
-    # TODO one way would be to have two vials off of the balance, and there
-    # could be an option for that, but that would probably generate slightly
-    # less noise on that side, considering it would only be one valve
-    # actuated
-    # TODO TODO TODO allow some configuration to allow one odor specified in
-    # odor list to be presented on both sides, for no-learning, zero discrim
-    # control. how best?
-    rospy.logwarn('Only one odor. When presented on one side, two valves' +
-        ' will click, but on the opposite side, no valves will. Asymmetry.')
+    if ('against_itself' in odors_and_pins[0] and
+        odors_and_pins[0]['against_itself']):
+
+        # TODO delete me
+        rospy.logwarn('TESTING ODOR AGAINST ITSELF')
+        #
+        unreinforced = odors[0]
+
+    else:
+        unreinforced = None
+        # TODO implement option to suppress warning?
+        # TODO TODO test that training / testing blocks generated after this
+        # path are reasoanble
+        # TODO one way would be to have two vials off of the balance, and there
+        # could be an option for that, but that would probably generate slightly
+        # less noise on that side, considering it would only be one valve
+        # actuated
+        # TODO TODO TODO allow some configuration to allow one odor specified in
+        # odor list to be presented on both sides, for no-learning, zero discrim
+        # control. how best?
+        rospy.logwarn('Only one odor. When presented on one side, two valves' +
+            ' will click, but on the opposite side, no valves will. Asymmetry.')
 
 else:
+    for odor in odors_and_pins:
+        if 'against_itself' in odor:
+            raise NotImplementedError(
+                "currently only support 'against_itself' option for one odor")
+
     # TODO rename (because sometimes we don't have any training trials?)
     reinforced, unreinforced = random.sample(odors, 2)
 
 if have_training_params:
+        # TODO TODO fix to accomodate 'against_itself' case + 1 odor against
+        # balance / nothing case
 	if len(odors) > 1 and training_blocks != 0:
 	    rospy.loginfo('pairing shock with '  + str(reinforced))
 	    rospy.loginfo('unpaired ' + str(unreinforced))
@@ -507,13 +525,13 @@ class StimuliGenerator:
             # TODO probably rename this flag to indicate its use here as well?
             # at least document
             if self.current_side_is_left:
-                pins = [odors2left_pins[reinforced], \
-                    odors2right_pins[reinforced]]
+                pins = [odors2left_pins[reinforced],
+                        odors2right_pins[reinforced]]
             else:
                 # TODO TODO consider erring if unreinforced is None
                 if not unreinforced is None:
-                    pins = [odors2left_pins[unreinforced], \
-                        odors2right_pins[unreinforced]]
+                    pins = [odors2left_pins[unreinforced],
+                            odors2right_pins[unreinforced]]
                 else:
                     # this work?
                     pins = []
@@ -521,14 +539,14 @@ class StimuliGenerator:
         else:
             if self.current_side_is_left:
                 if not unreinforced is None:
-                    pins = [odors2left_pins[reinforced], \
-                        odors2right_pins[unreinforced]]
+                    pins = [odors2left_pins[reinforced],
+                            odors2right_pins[unreinforced]]
                 else:
                     pins = [odors2left_pins[reinforced]]
             else:
                 if not unreinforced is None:
-                    pins = [odors2left_pins[unreinforced], \
-                        odors2right_pins[reinforced]]
+                    pins = [odors2left_pins[unreinforced],
+                            odors2right_pins[reinforced]]
                 else:
                     pins = [odors2right_pins[reinforced]]
 
