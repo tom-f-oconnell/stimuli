@@ -230,7 +230,6 @@ if not (odor_side_order == 'alternating' or odor_side_order == 'random'):
 ###############################################################################
 required_training_params = {
     'olf/training_blocks',
-    'olf/pretest_to_train_s',
     'olf/train_duration_s',
     'olf/inter_train_interval_s',
     'olf/train_to_posttest_s',
@@ -245,12 +244,19 @@ optional_training_params = {
     # TODO should also be an error if this is set when none of the other
     # training
     'olf/train_one_odor_at_a_time': True,
+    'olf/train_with_cs_minus': True,
+    # TODO implement support for negative delays?
+    'zap/delay_from_odor_onset_ms': 0,
 
     # TODO update definitions other places to use these parameter names
     'zap/left_control_pin': None,
     'zap/right_control_pin': None,
     # TODO still support left / right
-    'zap/control_pin': None
+    'zap/control_pin': None,
+
+    # TODO TODO handle case where this is not present, or provide another means
+    # of only having a post test
+    'olf/pretest_to_train_s': None
 }
 
 have_training_params = \
@@ -260,10 +266,6 @@ if have_training_params:
     left_shock = params['zap/left_control_pin']
     right_shock = params['zap/right_control_pin']
     all_shock = params['zap/control_pin']
-    # TODO delete me
-    rospy.logwarn('left_shock: {}'.format(left_shock))
-    rospy.logwarn('right_shock: {}'.format(right_shock))
-    rospy.logwarn('all_shock: {}'.format(all_shock))
 
     have_left = not (left_shock is None)
     have_right = not (right_shock is None)
@@ -275,20 +277,32 @@ if have_training_params:
 
         raise ValueError('only set either the parameters zap/control_pin or' + 
             ' both zap/left_control_pin and zap/right_control_pin')
+
     elif have_one_pin:
         one_pin_shock = True
     else:
         one_pin_shock = False
 
     training_blocks = params['olf/training_blocks']
-    pretest_to_train_s = params['olf/pretest_to_train_s']
+    
     train_duration_s = params['olf/train_duration_s']
     inter_train_interval_s = params['olf/inter_train_interval_s']
     train_to_posttest_s = params['olf/train_to_posttest_s']
+
+    pretest_to_train_s = params['olf/pretest_to_train_s']
+
     shock_ms_on = params['zap/shock_ms_on']
     shock_ms_off = params['zap/shock_ms_off']
 
     train_one_odor_at_a_time = params['olf/train_one_odor_at_a_time']
+    train_with_cs_minus = params['olf/train_with_cs_minus']
+
+    if not train_with_cs_minus:
+        # TODO delete me
+        rospy.logwarn('not training with CS minus!')
+        #
+        assert train_one_odor_at_a_time
+
 
 ###############################################################################
 # Parameters unique to experiments with NO reinforcement
@@ -522,9 +536,13 @@ class StimuliGenerator:
 
         # TODO check / test this part
         if train and train_one_odor_at_a_time:
+            if not train_with_cs_minus:
+                pins = [odors2left_pins[reinforced],
+                        odors2right_pins[reinforced]]
+
             # TODO probably rename this flag to indicate its use here as well?
             # at least document
-            if self.current_side_is_left:
+            elif self.current_side_is_left:
                 pins = [odors2left_pins[reinforced],
                         odors2right_pins[reinforced]]
             else:
@@ -542,6 +560,7 @@ class StimuliGenerator:
                     pins = [odors2left_pins[reinforced],
                             odors2right_pins[unreinforced]]
                 else:
+                    # TODO what's point of this branch again?
                     pins = [odors2left_pins[reinforced]]
             else:
                 if not unreinforced is None:
@@ -562,14 +581,26 @@ class StimuliGenerator:
         """
         TODO
         """
+        # TODO TODO TODO verify this use of Transition.t leads to expected
+        # behavior
+        # TODO handle as other params (make var)
+        onset_delay_ms = params['zap/delay_from_odor_onset_ms']
         square_wave = State(ms_on=shock_ms_on, ms_off=shock_ms_off)
-        transition = Transition(self.current_t0, square_wave)
+        transition = Transition(self.current_t0 + 
+            rospy.Duration(onset_delay_ms / 1000.0), square_wave)
 
         if train_one_odor_at_a_time:
+            if not train_with_cs_minus:
+                # TODO maybe refactor a little to avoid this duplication
+                if one_pin_shock:
+                    return [all_shock], [transition]
+                else:
+                    return [left_shock, right_shock], [transition, transition]
+
             # when train_one_odor_at_a_time is True, current_side_is_left
             # indicates whether the current training epoch will use the
             # reinforced_odor or the unreinforced_odor
-            if self.current_side_is_left:
+            elif self.current_side_is_left:
                 # TODO test
                 if one_pin_shock:
                     # TODO what happens on the Arduino if it is given a
@@ -652,9 +683,10 @@ t0_sec = gen.current_t0.to_sec()
 if have_training_params:
     # TODO factor out code to accommodate variable number of training blocks for
     # testing blocks?
-    trial_structure = [gen.delay(prestimulus_delay_s),
-                       gen.test(),
-                       gen.delay(pretest_to_train_s)] + \
+    trial_structure = [gen.delay(prestimulus_delay_s)] + \
+                      ([] if (pretest_to_train_s is None) else
+                       [gen.test(),
+                        gen.delay(pretest_to_train_s)]) + \
                       ((flatten([[f(), gen.delay(inter_train_interval_s)] for f
                         in [gen.train] * (training_blocks - 1)]) + \
                       [gen.train()]) if training_blocks > 0 else []) + \
