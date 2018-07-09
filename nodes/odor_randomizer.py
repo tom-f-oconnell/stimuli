@@ -625,8 +625,6 @@ class StimuliGenerator:
 
     def test(self):
         start = self.current_t0
-        end = start + rospy.Duration(test_duration_s)
-        self.current_t0 = end
 
         pins, seq = self.odor_transitions()
         if odor_side_order == 'alternating':
@@ -639,15 +637,19 @@ class StimuliGenerator:
             self.current_side_is_left = random.choice([True, False])
 
         pins_to_signal = []
+
+        end = start + rospy.Duration(test_duration_s)
         seq = Sequence(start, end, pins, seq)
+
+        # Since odor_transitions uses this, the update has to happen after that
+        # call.
+        self.current_t0 = end
         return LoadSequenceRequest(Header(), seq, pins_to_signal)
 
 
     # TODO share most of this function with test?
     def train(self):
         start = self.current_t0
-        end = start + rospy.Duration(train_duration_s)
-        self.current_t0 = end
 
         odor_pins, odor_seq = self.odor_transitions(train=True)
         shock_pins, shock_seq = self.shock_transitions()
@@ -661,7 +663,13 @@ class StimuliGenerator:
             self.current_side_is_left = random.choice([True, False])
 
         pins_to_signal = []
+
+        end = start + rospy.Duration(train_duration_s)
         seq = Sequence(start, end, pins, seq)
+
+        # Since odor_transitions and shock_transitions use this, the update has
+        # to happen after those calls.
+        self.current_t0 = end
         return LoadSequenceRequest(Header(), seq, pins_to_signal)
 
 
@@ -710,6 +718,7 @@ elif have_testonly_params:
 
 # TODO even if not printed to /rosout, is this saved by default?
 # (seems like no)
+print('trial_structure', trial_structure)
 rospy.logdebug('trial_structure', trial_structure)
 rospy.logdebug('epoch_labels', epoch_labels)
 
