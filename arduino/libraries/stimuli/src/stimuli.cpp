@@ -200,9 +200,12 @@ namespace stim {
       soonest_ms = to_millis(req.seq.seq[0].t);
       
       stimuli::Transition curr;
+      unsigned long curr_ms;
 
       // TODO maybe assert seq.seq and seq.pins have same length?
       unsigned char j = 0;
+      // TODO TODO make diff types just to check that i'm not comparing offset
+      // times w/ non-offset times (though both supported by unsigned longs)?
       for (int i=0;i<req.seq.seq_length;i++) {
         // TODO test
         // TODO plan to sort python side, but will assert that time was not less
@@ -229,21 +232,22 @@ namespace stim {
             next_state[j] = HIGH;
           }
 
-          // TODO only if pwm?
-          // TODO uniform start or set each to first transition time?
-          // assume pins already in default states by start?
-          // TODO TODO fix. this makes first s.t meaningless (pins set to next
-          // state here)
-          next_time_ms[j] = to_millis(curr.t);
-
           // TODO despite sorting in python, this might be nice to the extent i
           // can reuse code for inevitable sorting for second soonest? use tree
           // / other nice data structure?
           // TODO subtract before comparing
           // TODO TODO necessary? won't i be checking this inequality later
           // anyway?
-          if (next_time_ms[j] < soonest_ms) {
-            soonest_ms = next_time_ms[j];
+          curr_ms = to_millis(curr.t);
+
+          // TODO only if pwm?
+          // TODO uniform start or set each to first transition time?
+          // assume pins already in default states by start?
+          // TODO TODO fix. this makes first s.t meaningless (pins set to next
+          // state here)
+          next_time_ms[j] = curr_ms - rostime_millis_offset;
+          if (curr_ms < soonest_ms) {
+            soonest_ms = curr_ms;
           }
           j++;
         }
