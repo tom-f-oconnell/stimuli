@@ -46,9 +46,6 @@ namespace stim {
     boolean defaults_registered;
     boolean pulse_registered;
 
-    // TODO is this ever correctly set?? test!
-    //stimuli::Sequence seq;
-
     // TODO fixed width types
     unsigned long start_ms;
     unsigned long end_ms;
@@ -178,25 +175,6 @@ namespace stim {
         fail("was sent another set of stimulus info before first expired");
       }
       clear_pins();
-     
-      // TODO TODO TODO does this work or potentially fail (dangling pointer)?
-      // need to deep copy or is there easier workaround?
-      // TODO test
-      //seq = req.seq;
-
-      /*
-      char str[30];
-      sprintf(str, "seq_length %lu", req.seq.seq_length);
-      nh.loginfo(str);
-     
-      for (int i=0;i<req.seq.seq_length;i++) {
-        sprintf(str, "i %d pin %d", i, req.seq.pins[i]);
-        nh.loginfo(str);
-        sprintf(str, "s on %lu off %lu", req.seq.seq[i].s.ms_on, \
-          req.seq.seq[i].s.ms_off);
-        nh.loginfo(str);
-      }
-      */
 
       // TODO TODO maybe this should not be sent separately? (just a flag
       // parameter)
@@ -214,38 +192,14 @@ namespace stim {
       // TODO this actually a keyword problem ("end")?
       end_ms = to_millis(req.seq.end) - rostime_millis_offset;
 
-      char str[30];
-      /*
-      if (debug) {
-        sprintf(str, "ros_now_ms %lu", ros_now_ms);
-        nh.logwarn(str);
-        sprintf(str, "now_ms %lu", now_ms);
-        nh.logwarn(str);
-        sprintf(str, "rostime_millis_offset %lu", rostime_millis_offset);
-        nh.logwarn(str);
-        // TODO TODO i need to get it s.t. start_ms is < millis() here,
-        // preferably by a little bit of a margin
-
-        sprintf(str, "start_ms %lu", start_ms);
-        nh.logwarn(str);
-        sprintf(str, "end_ms %lu", end_ms);
-        nh.logwarn(str);
-
-        // TODO this is correct. why is it different from what i'm getting
-        // above?
-        // TODO TODO still a problem?
-        int diff = req.seq.end.sec - req.seq.start.sec;
-        sprintf(str, "duration secs via ros %d", diff);
-        nh.logwarn(str);
-      }
-      */
-
       // TODO either guarantee this list is sorted before leaving python or find
       // minimum here
+      // TODO TODO TODO shouldn't i be either explicitly finding the min here,
+      // or using start (which is / should be guaranteed to be min?) just
+      // guarantee sorting?
       soonest_ms = to_millis(req.seq.seq[0].t);
       
       stimuli::Transition curr;
-      unsigned long curr_ms;
 
       // TODO maybe assert seq.seq and seq.pins have same length?
       unsigned char j = 0;
@@ -258,7 +212,7 @@ namespace stim {
           if (j != 0) {
             // will need to set last_state_index for last pin
             // at the end of the loop
-            last_state_index[j-1] = i-1;
+            last_state_index[j - 1] = i - 1;
           }
           pins[j] = req.seq.pins[i];
           // assumes soonest is first (receiving list sorted within each pin)
@@ -280,15 +234,16 @@ namespace stim {
           // assume pins already in default states by start?
           // TODO TODO fix. this makes first s.t meaningless (pins set to next
           // state here)
-          next_time_ms[j] = start_ms;
+          next_time_ms[j] = to_millis(curr.t);
 
           // TODO despite sorting in python, this might be nice to the extent i
           // can reuse code for inevitable sorting for second soonest? use tree
           // / other nice data structure?
-          curr_ms = to_millis(curr.t);
           // TODO subtract before comparing
-          if (curr_ms < soonest_ms) {
-            soonest_ms = curr_ms;
+          // TODO TODO necessary? won't i be checking this inequality later
+          // anyway?
+          if (next_time_ms[j] < soonest_ms) {
+            soonest_ms = next_time_ms[j];
           }
           j++;
         }
@@ -673,6 +628,7 @@ namespace stim {
     static inline void update_pulses_blocking() {
       nh.loginfo("stimulus arduino beginning sequence");
       digitalWrite(LED_BUILTIN, HIGH);
+      // TODO this should also support variable transitions times...
       set_non_pwm_pins();
       while (millis() <= end_ms) {
       // while (micros() < end_us) {
@@ -724,9 +680,6 @@ namespace stim {
     
     // worth an inline declaration? would need to declare in header / extern?
     void update() {
-      //char str[30];
-      //sprintf(str, "before spin %lu", millis());
-      //nh.logwarn(str);
       // bounds on how long this will take?
       // TODO debug compile flags to track distribution of times this takes, w/
       // emphasis on extreme values? for reporting.
