@@ -117,9 +117,6 @@ required_params = {
     'olf/odors'
 }
 
-# TODO TODO allow option to prespecify odor connections
-# (and maybe another option to indicate whether this or random connections are
-#  desired)
 # TODO option to have first side be (deterministically) either left or right?
 optional_params = {
     'olf/random_valve_connections': True,
@@ -166,6 +163,7 @@ save_yaml_stiminfo = params['olf/save_yaml_stiminfo']
 # TODO document odors parameter format
 assert len(odors_and_pins) > 0, \
     'List of odors can not be empty. See docs for format.'
+
 for odor in odors_and_pins:
     if not (type(odor) is dict) or len(odor.keys()) == 0:
         raise ValueError("each entry of 'olf/odors' parameter should parse as" +
@@ -298,9 +296,6 @@ if have_training_params:
     train_with_cs_minus = params['olf/train_with_cs_minus']
 
     if not train_with_cs_minus:
-        # TODO delete me
-        rospy.logwarn('not training with CS minus!')
-        #
         assert train_one_odor_at_a_time
 
 
@@ -344,10 +339,10 @@ else:
         time.localtime()) + '_mappings.p'
 
     if os.path.isfile(daily_connections_filename):
-        c = raw_input('Found saved mappings from today. Load them? ' + \
+        c = raw_input('Found saved mappings from today. Load them? ' +
             '([y]es/[n]o/[d]elete them.')
         if c.lower() == 'y':
-            rospy.loginfo('loading odors and odor->pin mappings from ' + \
+            rospy.loginfo('loading odors and odor->pin mappings from ' +
                 daily_connections_filename)
             with open(daily_connections_filename, 'rb') as f:
                 odors, left_pins, right_pins = pickle.load(f)
@@ -424,9 +419,6 @@ if len(odors) == 1:
     if ('against_itself' in odors_and_pins[0] and
         odors_and_pins[0]['against_itself']):
 
-        # TODO delete me
-        rospy.logwarn('TESTING ODOR AGAINST ITSELF')
-        #
         unreinforced = odors[0]
 
     else:
@@ -751,8 +743,8 @@ default_states = [DefaultState(p, True) for p in set(high_pins)] + \
 # So this won't publish to /rosout unless this is called from a node that has
 # been "set up properly" with init_node. Is that required for it to be displayed
 # on the screen? Or saved in log files elsewhere?
-rospy.loginfo('Stimuli should finish at ' + \
-    datetime.datetime.fromtimestamp(gen.current_t0.to_sec()).strftime(\
+rospy.loginfo('Stimuli should finish at ' +
+    datetime.datetime.fromtimestamp(gen.current_t0.to_sec()).strftime(
     '%Y-%m-%d %H:%M:%S'))
 rospy.loginfo(str(gen.current_t0.to_sec() - t0_sec) + ' seconds')
 
@@ -820,7 +812,7 @@ if save_stimulus_info:
         # TODO fix node number thing
         experiment_basename = \
             time.strftime('%Y%m%d_%H%M%S_N1', time.localtime())
-        rospy.set_param('multi_tracker/experiment_basename', \
+        rospy.set_param('multi_tracker/experiment_basename',
             experiment_basename)
 
     output_dir = os.path.join(output_base_dir, experiment_basename)
@@ -834,7 +826,7 @@ if save_stimulus_info:
     # TODO check / test success
     with open(filename, 'wb') as f:
         # TODO maybe also save this as a dict?
-        pickle.dump((odors2left_pins, odors2right_pins, default_states, \
+        pickle.dump((odors2left_pins, odors2right_pins, default_states,
             trial_structure), f)
 
     # TODO allow testing this w/o running experiment
@@ -855,9 +847,9 @@ if save_stimulus_info:
             yaml.dump(stiminfo, f)
 
 else:
-    rospy.logwarn('Not saving generated trial structure ' + \
+    rospy.logwarn('Not saving generated trial structure ' +
         '/ pin to odor mappings!')
 
-stimuli_loader = StimuliLoader(default_states, trial_structure, \
+stimuli_loader = StimuliLoader(default_states, trial_structure,
     epoch_labels=epoch_labels)
 
