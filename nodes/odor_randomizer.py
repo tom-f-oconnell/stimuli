@@ -339,28 +339,37 @@ else:
         time.localtime()) + '_mappings.p'
 
     if os.path.isfile(daily_connections_filename):
-        c = raw_input('Found saved mappings from today. Load them? ' +
+        saved_conns_msg = ('Found saved mappings from today. Load them? ' +
             '([y]es/[n]o/[d]elete them.')
-        if c.lower() == 'y':
-            rospy.loginfo('loading odors and odor->pin mappings from ' +
-                daily_connections_filename)
-            with open(daily_connections_filename, 'rb') as f:
-                odors, left_pins, right_pins = pickle.load(f)
-            generate_odor_to_pin_connections = False
 
-        elif c.lower() == 'n':
-            # TODO TODO will this not overwrite anyway? maybe eliminate either
-            # this or the below option, and make clear that the remaining option
-            # will delete existing temporary mappings
-            generate_odor_to_pin_connections = True
+        success = False
+        # TODO test
+        while not success:
+            c = raw_input(saved_conns_msg)
 
-        elif c.lower() == 'd':
-            rospy.logwarn('Deleting ' + daily_connections_filename)
-            os.remove(daily_connections_filename)
-            generate_odor_to_pin_connections = True
+            if c.lower() == 'y':
+                rospy.loginfo('loading odors and odor->pin mappings from ' +
+                    daily_connections_filename)
+                with open(daily_connections_filename, 'rb') as f:
+                    odors, left_pins, right_pins = pickle.load(f)
+                generate_odor_to_pin_connections = False
 
-        else:
-            raise ValueError('invalid choice')
+            elif c.lower() == 'n':
+                # TODO TODO will this not overwrite anyway? maybe eliminate
+                # either this or the below option, and make clear that the
+                # remaining option will delete existing temporary mappings
+                generate_odor_to_pin_connections = True
+
+            elif c.lower() == 'd':
+                rospy.logwarn('Deleting ' + daily_connections_filename)
+                os.remove(daily_connections_filename)
+                generate_odor_to_pin_connections = True
+
+            else:
+                rospy.logerr('invalid choice!')
+                continue
+
+            success = True
 
     else:
         generate_odor_to_pin_connections = True
