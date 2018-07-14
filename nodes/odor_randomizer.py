@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import division
 from __future__ import print_function
 
 import random
@@ -133,7 +134,8 @@ optional_params = {
     'olf/right_balance': None,
     'olf/odor_side_order': 'alternating',
     # If False, always loads existing mappings, if they are present.
-    'olf/prompt_to_regen_connections': False
+    'olf/prompt_to_regen_connections': False,
+    'olf/valve_odor_connections_expiration_hr': 6
 }
 
 get_params(params, required_params, optional_params)
@@ -335,37 +337,87 @@ if not random_valve_connections:
     # different datatype
 
 else:
-    # TODO maybe just reset at like 5am or check for experiments in last few
-    # hours, to use the same mappings after midnight, but in the same workday
-    # TODO rename from daily_...
-    daily_connections_filename = '.' + time.strftime('%Y%m%d',
-        time.localtime()) + '_mappings.p'
+    # ../ so it goes in directory that contains experiment group directories
+    # (e.g. ~/data, rather than ~/data/<experiment_group_name>), so that it
+    # does not need to be copied across experiment groups, and 
+    valve_conns_filename = '../.tmp_valve_connections.p'
+    abs_valve_conns_filename = os.path.abspath(valve_conns_filename)
 
-    if os.path.isfile(daily_connections_filename):
-        success = False
-        while not success:
-            if params['olf/prompt_to_regen_connections']:
-                c = raw_input('Found saved valve->odor mapping. Load? [y/n]\n')
-            else:
-                c = 'y'
+    if os.path.isfile(valve_conns_filename):
+        map_age_hrs = \
+            abs(os.path.getmtime(valve_conns_filename) - time.time()) / 3600.0
 
-            if c.lower() == 'y':
-                rospy.loginfo('loading odors and odor->pin mappings from ' +
-                    daily_connections_filename)
-                with open(daily_connections_filename, 'rb') as f:
-                    odors, left_pins, right_pins = pickle.load(f)
-                generate_odor_to_pin_connections = False
+        if map_age_hrs > params['olf/valve_odor_connections_expiration_hr']:
 
-            elif c.lower() == 'n':
-                rospy.logwarn('Deleting ' + daily_connections_filename)
-                os.remove(daily_connections_filename)
+            rospy.loginfo('Cached odor->valve map has expired ' +
+                '(age: {} hrs, lifetime: {})'.format(map_age_hrs,
+                params['olf/valve_odor_connections_expiration_hr']))
+            rospy.logwarn('Deleting ' + abs_valve_conns_filename)
+            generate_odor_to_pin_connections = True
+
+        else:
+            # Need to check it has valid odors / pins for our current
+            # experiment, since this is now shared across experiment groups,
+            # which could have different stimulus parameters.
+            with open(valve_conns_filename, 'rb') as f:
+                saved_odors, saved_left_pins, saved_right_pins = pickle.load(f)
+
+            saved_conns_valid = True
+            for o in saved_odors:
+                if not o in odors:
+                    saved_conns_valid = False
+                    break
+
+            if saved_conns_valid:
+                for p in saved_left_pins:
+                    if not p in left_pins:
+                        saved_conns_valid = False
+                        break
+            
+            if saved_conns_valid:
+                for p in saved_right_pins:
+                    if not p in right_pins:
+                        saved_conns_valid = False
+                        break
+
+            if not saved_conns_valid:
+                success = True
+                rospy.logwarn('Cached odor->valve map had pins or odors ' +
+                    'not in current stimulus_parameters.yaml')
+                rospy.logwarn('Deleting ' + abs_valve_conns_filename)
+                os.remove(valve_conns_filename)
                 generate_odor_to_pin_connections = True
 
-            else:
-                rospy.logerr('invalid choice!')
-                continue
+            success = False
+            while not success:
+                if params['olf/prompt_to_regen_connections']:
+                    # TODO make sure ctrl-c closes roslaunch w/o blocking on
+                    # this
+                    c = raw_input(
+                        'Found saved valve->odor mapping. Use? [y/n]\n')
+                else:
+                    c = 'y'
 
-            success = True
+                if c.lower() == 'y':
+                    rospy.loginfo('Using odors and odor->pin mappings from ' +
+                        abs_valve_conns_filename)
+
+                    odors = saved_odors
+                    left_pins = saved_left_pins
+                    right_pins = saved_right_pins
+
+                    generate_odor_to_pin_connections = False
+
+                elif c.lower() == 'n':
+                    rospy.logwarn('Deleting ' + abs_valve_conns_filename)
+                    os.remove(valve_conns_filename)
+                    generate_odor_to_pin_connections = True
+
+                else:
+                    rospy.logerr('Invalid choice!')
+                    continue
+
+                success = True
 
     else:
         generate_odor_to_pin_connections = True
@@ -387,10 +439,10 @@ else:
             # exit that checks some success flag or something? or gets cancelled
             # during a successful exit?
 
-        with open(daily_connections_filename, 'wb') as f:
-            rospy.loginfo('temporarily saving odors and odor->pin mappings ' + \
-                'to ' + daily_connections_filename + ', for reuse in other ' + \
-                'experiments today.')
+        with open(valve_conns_filename, 'wb') as f:
+            rospy.loginfo('temporarily saving odors and odor->pin mappings ' +
+                'to ' + abs_valve_conns_filename +
+                ', for reuse in other experiments today.')
             pickle.dump([odors, left_pins, right_pins], f)
             # TODO verify it saved correctly?
 
@@ -464,6 +516,7 @@ if have_training_params:
 # TODO when should i wait / not wait? need the param?
 wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
+    # TODO make sure ctrl-c closes roslaunch w/o blocking on this
     raw_input('Press Enter when the odor vials are connected.\n')
 
 
