@@ -135,6 +135,7 @@ optional_params = {
     'olf/odor_side_order': 'alternating',
     # If False, always loads existing mappings, if they are present.
     'olf/prompt_to_regen_connections': False,
+    # Relative to the last experiment run.
     'olf/valve_odor_connections_expiration_hr': 6
 }
 
@@ -445,6 +446,11 @@ else:
                 ', for reuse in other experiments today.')
             pickle.dump([odors, left_pins, right_pins], f)
             # TODO verify it saved correctly?
+
+    else:
+        # Updates mtime of this file, so that expiration is relative to last
+        # run.
+        os.utime(valve_conns_filename)
 
 # TODO
 # randomly break stimuli into groups fitting into the number of 
