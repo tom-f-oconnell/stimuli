@@ -132,6 +132,8 @@ optional_params = {
     'olf/left_balance': None,
     'olf/right_balance': None,
     'olf/odor_side_order': 'alternating',
+    # If False, always loads existing mappings, if they are present.
+    'olf/prompt_to_regen_connections': False
 }
 
 get_params(params, required_params, optional_params)
@@ -335,17 +337,17 @@ if not random_valve_connections:
 else:
     # TODO maybe just reset at like 5am or check for experiments in last few
     # hours, to use the same mappings after midnight, but in the same workday
+    # TODO rename from daily_...
     daily_connections_filename = '.' + time.strftime('%Y%m%d',
         time.localtime()) + '_mappings.p'
 
     if os.path.isfile(daily_connections_filename):
-        saved_conns_msg = ('Found saved mappings from today. Load them? ' +
-            '([y]es/[n]o/[d]elete them.')
-
         success = False
-        # TODO test
         while not success:
-            c = raw_input(saved_conns_msg)
+            if params['olf/prompt_to_regen_connections']:
+                c = raw_input('Found saved valve->odor mapping. Load? [y/n]\n')
+            else:
+                c = 'y'
 
             if c.lower() == 'y':
                 rospy.loginfo('loading odors and odor->pin mappings from ' +
@@ -355,12 +357,6 @@ else:
                 generate_odor_to_pin_connections = False
 
             elif c.lower() == 'n':
-                # TODO TODO will this not overwrite anyway? maybe eliminate
-                # either this or the below option, and make clear that the
-                # remaining option will delete existing temporary mappings
-                generate_odor_to_pin_connections = True
-
-            elif c.lower() == 'd':
                 rospy.logwarn('Deleting ' + daily_connections_filename)
                 os.remove(daily_connections_filename)
                 generate_odor_to_pin_connections = True
@@ -468,7 +464,7 @@ if have_training_params:
 # TODO when should i wait / not wait? need the param?
 wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
-    raw_input('Press Enter when the odor vials are connected.')
+    raw_input('Press Enter when the odor vials are connected.\n')
 
 
 # TODO TODO TODO make sure randomness isn't broken here, and that the mappings
@@ -477,8 +473,8 @@ if wait_for_keypress:
 odors2left_pins = dict(zip(odors, left_pins))
 odors2right_pins = dict(zip(odors, right_pins))
 
+# TODO TODO turn into a test
 '''
-# TODO turn into a test?
 o1_pins = [p for o, p in odors2left_pins.items() if o == o1] + \
     [p for o, p in odors2right_pins.items() if o == o1]
 o2_pins = [p for o, p in odors2left_pins.items() if o == o2] + \
