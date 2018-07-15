@@ -346,7 +346,7 @@ else:
 
     if os.path.isfile(valve_conns_filename):
         map_age_hrs = \
-            abs(os.path.getmtime(valve_conns_filename) - time.time()) / 3600.0
+            (time.time() - os.path.getmtime(valve_conns_filename)) / 3600.0
 
         if map_age_hrs > params['olf/valve_odor_connections_expiration_hr']:
 
