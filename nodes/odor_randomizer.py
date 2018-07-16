@@ -450,7 +450,9 @@ else:
     else:
         # Updates mtime of this file, so that expiration is relative to last
         # run.
-        os.utime(valve_conns_filename)
+        # "If times is None, then the file's access and modified times are
+        #  set to the current time."
+        os.utime(valve_conns_filename, None)
 
 # TODO
 # randomly break stimuli into groups fitting into the number of 
