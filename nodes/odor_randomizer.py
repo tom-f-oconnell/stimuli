@@ -392,6 +392,10 @@ else:
             success = False
             while not success:
                 if params['olf/prompt_to_regen_connections']:
+                    # TODO TODO why isn't this working, re: note below?
+                    if rospy.is_shutdown():
+                        sys.exit()
+
                     # TODO make sure ctrl-c closes roslaunch w/o blocking on
                     # this
                     c = raw_input(
@@ -524,6 +528,9 @@ if have_training_params:
 # TODO when should i wait / not wait? need the param?
 wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
+    if rospy.is_shutdown():
+        sys.exit()
+
     # TODO make sure ctrl-c closes roslaunch w/o blocking on this
     raw_input('Press Enter when the odor vials are connected.\n')
 
