@@ -91,6 +91,62 @@ def get_params(param_dict, required_params, default_params):
     return len(defaults_found) > 0 or len(required_found) > 0
 
 
+# TODO maybe define this in a general utility library? (unix specific?)
+def nonblocking_raw_input(prompt, timeout_s=1):
+    """Returns None if timeout, otherwise behaves as raw_input.
+
+    Unix specific.
+
+    Need to use signal.setitimer if I want better than 1s resolution.
+
+    See jer's answer here:
+    https://stackoverflow.com/questions/2933399/how-to-set-time-limit-on-raw-input
+    """
+    import signal
+
+    class AlarmException(Exception):
+        pass
+
+    def alarm_handler(signum, frame):
+        raise AlarmException
+
+    signal.signal(signal.SIGALRM, alarm_handler)
+    signal.alarm(timeout_s)
+    try:
+        text = raw_input(prompt)
+        signal.alarm(0)
+        return text
+
+    except AlarmException:
+        pass
+
+    signal.signal(signal.SIGALRM, signal.SIG_IGN)
+    return None
+
+
+def ros_friendly_raw_input(prompt):
+    """raw_input that periodically polls for input and checks for ROS shutdown.
+
+    If ROS is shutdown while blocking, calls sys.exit()
+    """
+    not_shown_prompt = True
+    while not rospy.is_shutdown():
+        if not_shown_prompt:
+            out = nonblocking_raw_input(prompt)
+            not_shown_prompt = False
+        else:
+            out = nonblocking_raw_input('')
+
+        if not (out is None):
+            return out
+
+        # to not take up as much resources
+        # not sure if it'd make much of a difference
+        time.sleep(0.1)
+
+    sys.exit()
+
+
 # TODO provide a function in this file that stimuli_loader can call and pass a
 # parameter indicating where to find the containing file to stimuli_loader?
 # then move the node maintenance stuff to there?
@@ -392,13 +448,7 @@ else:
             success = False
             while not success:
                 if params['olf/prompt_to_regen_connections']:
-                    # TODO TODO why isn't this working, re: note below?
-                    if rospy.is_shutdown():
-                        sys.exit()
-
-                    # TODO make sure ctrl-c closes roslaunch w/o blocking on
-                    # this
-                    c = raw_input(
+                    c = ros_friendly_raw_input(
                         'Found saved valve->odor mapping. Use? [y/n]\n')
                 else:
                     c = 'y'
@@ -438,11 +488,9 @@ else:
         left_pins = random.sample(left_pins, len(odors))
         right_pins = random.sample(right_pins, len(odors))
 
-        if rospy.is_shutdown():
-            sys.exit()
-            # TODO need to also delete if gets shutdown prematurely? register on
-            # exit that checks some success flag or something? or gets cancelled
-            # during a successful exit?
+        # TODO need to also delete if gets shutdown prematurely? register on
+        # exit that checks some success flag or something? or gets cancelled
+        # during a successful exit?
 
         with open(valve_conns_filename, 'wb') as f:
             rospy.loginfo('temporarily saving odors and odor->pin mappings ' +
@@ -521,18 +569,13 @@ if have_training_params:
 	    rospy.loginfo('pairing shock with '  + str(reinforced))
 	    rospy.loginfo('unpaired ' + str(unreinforced))
 
-# include this in optional parameter dict above?
-# TODO also only start recording when this is done? (when using this with
+# TODO include this in optional parameter dict above?
+# TODO TODO also only start recording when this is done? (when using this with
 # multi_tracker) (maybe preferably, just make sure tracking is started before
 # starting stimuli)
-# TODO when should i wait / not wait? need the param?
 wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
-    if rospy.is_shutdown():
-        sys.exit()
-
-    # TODO make sure ctrl-c closes roslaunch w/o blocking on this
-    raw_input('Press Enter when the odor vials are connected.\n')
+    ros_friendly_raw_input('Press Enter when the odor vials are connected.\n')
 
 
 # TODO TODO TODO make sure randomness isn't broken here, and that the mappings
