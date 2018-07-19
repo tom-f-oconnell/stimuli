@@ -950,8 +950,17 @@ if save_stimulus_info:
         # make sure i don't mutate these, since the same variables are passed to
         # stimuli loader
         stiminfo = dict()
-        stiminfo['odors2left_pins'] = odors2left_pins
-        stiminfo['odors2right_pins'] = odors2right_pins
+
+        left_pins2odors = dict()
+        for o, p in odors2left_pins.items():
+            left_pins2odors[p] = list(o)
+
+        right_pins2odors = dict()
+        for o, p in odors2right_pins.items():
+            right_pins2odors[p] = list(o)
+
+        stiminfo['left_pins2odors'] = left_pins2odors
+        stiminfo['right_pins2odors'] = right_pins2odors
         
         stiminfo['high_by_default'] = represent_default_states(default_states)
 
