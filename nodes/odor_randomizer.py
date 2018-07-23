@@ -419,6 +419,7 @@ else:
             with open(valve_conns_filename, 'rb') as f:
                 saved_odors, saved_left_pins, saved_right_pins = pickle.load(f)
 
+            success = False
             saved_conns_valid = True
             for o in saved_odors:
                 if not o in odors:
@@ -445,7 +446,6 @@ else:
                 os.remove(valve_conns_filename)
                 generate_odor_to_pin_connections = True
 
-            success = False
             while not success:
                 if params['olf/prompt_to_regen_connections']:
                     c = ros_friendly_raw_input(
