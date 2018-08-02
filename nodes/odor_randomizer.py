@@ -192,7 +192,10 @@ optional_params = {
     # If False, always loads existing mappings, if they are present.
     'olf/prompt_to_regen_connections': False,
     # Relative to the last experiment run.
-    'olf/valve_odor_connections_expiration_hr': 6
+    'olf/valve_odor_connections_expiration_hr': 6,
+    'olf/flanking_solvent_test_blocks': 0,
+    'olf/solvent_test_to_first_test_s': None,
+    'olf/last_test_to_solvent_test_s': None
 }
 
 get_params(params, required_params, optional_params)
@@ -216,6 +219,9 @@ odors_and_pins = params['olf/odors']
 
 save_yaml_stiminfo = params['olf/save_yaml_stiminfo']
 
+flanking_solvent_test_blocks = params['olf/flanking_solvent_test_blocks']
+solvent_test_to_first_test_s = params['olf/solvent_test_to_first_test_s']
+last_test_to_solvent_test_s = params['olf/last_test_to_solvent_test_s']
 
 # TODO should one odor in list imply a copy of the balance to be used on the
 # opposite side? (maybe if balance_normally_flowing is false, or something like
@@ -225,6 +231,8 @@ save_yaml_stiminfo = params['olf/save_yaml_stiminfo']
 assert len(odors_and_pins) > 0, \
     'List of odors can not be empty. See docs for format.'
 
+solvent_specified = False
+solvent = None
 for odor in odors_and_pins:
     if not (type(odor) is dict) or len(odor.keys()) == 0:
         raise ValueError("each entry of 'olf/odors' parameter should parse as" +
@@ -240,10 +248,34 @@ for odor in odors_and_pins:
 
     for k in odor.keys():
         if k not in {'name', 'vial_log10_concentration',
-            'left_pin', 'right_pin', 'against_itself'}:
+            'left_pin', 'right_pin', 'against_itself', 'solvent'}:
 
             raise ValueError('Did not recognize key {}'.format(k) +
                 "in an entry under 'olf/odors' parameter.")
+
+    if 'solvent' in odor.keys() and odor['solvent']:
+        if solvent_specified:
+            raise NotImplementedError('Currently only support specifying one ' +
+                'solvent in olf/odors list.')
+         
+        solvent_specified = True
+        solvent = (odor['name'], odor['vial_log10_concentration'])
+
+if flanking_solvent_test_blocks > 0:
+    if flanking_solvent_test_blocks > 1:
+        raise NotImplementedError('Currently only support one solvent only ' +
+            'test on either end.')
+
+    if not solvent_specified:
+        raise ValueError('One entry in olf/odors must include "solvent: True"' +
+            ', if have flanking solvent tests.')
+
+        if solvent_test_to_first_test_s is None:
+            raise ValueError('Specify olf/solvent_test_to_first_test_s')
+
+        if last_test_to_solvent_test_s is None:
+            raise ValueError('Specify olf/last_test_to_solvent_test_s')
+
 
 # TODO TODO TODO infer that random_valve_connections should be false if it is
 # not specified, and if left_pin + right_pin are specified for each odor in the
@@ -610,7 +642,7 @@ class StimuliGenerator:
         self.current_side_is_left = random.choice([True, False])
 
     # currently just on all the time. maybe i want something else?
-    def odor_transitions(self, train=False):
+    def odor_transitions(self, train=False, solvent_only=False):
         """
         TODO
         """
@@ -642,40 +674,43 @@ class StimuliGenerator:
                 expanded_pins.extend(len(balance_transition) * [p])
                 seq.extend(balance_transition)
 
-        # TODO check / test this part
-        if train and train_one_odor_at_a_time:
-            if not train_with_cs_minus:
-                pins = [odors2left_pins[reinforced],
-                        odors2right_pins[reinforced]]
-
-            # TODO probably rename this flag to indicate its use here as well?
-            # at least document
-            elif self.current_side_is_left:
-                pins = [odors2left_pins[reinforced],
-                        odors2right_pins[reinforced]]
-            else:
-                # TODO TODO consider erring if unreinforced is None
-                if not unreinforced is None:
-                    pins = [odors2left_pins[unreinforced],
-                            odors2right_pins[unreinforced]]
-                else:
-                    # this work?
-                    pins = []
-
+        if solvent_only:
+            pins = [odors2left_pins[solvent], odors2right_pins[solvent]]
         else:
-            if self.current_side_is_left:
-                if not unreinforced is None:
+            # TODO check / test this part
+            if train and train_one_odor_at_a_time:
+                if not train_with_cs_minus:
                     pins = [odors2left_pins[reinforced],
-                            odors2right_pins[unreinforced]]
-                else:
-                    # TODO what's point of this branch again?
-                    pins = [odors2left_pins[reinforced]]
-            else:
-                if not unreinforced is None:
-                    pins = [odors2left_pins[unreinforced],
+                            odors2right_pins[reinforced]]
+
+                # TODO probably rename this flag to indicate its use here as
+                # well?  at least document
+                elif self.current_side_is_left:
+                    pins = [odors2left_pins[reinforced],
                             odors2right_pins[reinforced]]
                 else:
-                    pins = [odors2right_pins[reinforced]]
+                    # TODO TODO consider erring if unreinforced is None
+                    if not unreinforced is None:
+                        pins = [odors2left_pins[unreinforced],
+                                odors2right_pins[unreinforced]]
+                    else:
+                        # this work?
+                        pins = []
+
+            else:
+                if self.current_side_is_left:
+                    if not unreinforced is None:
+                        pins = [odors2left_pins[reinforced],
+                                odors2right_pins[unreinforced]]
+                    else:
+                        pins = [odors2left_pins[reinforced]]
+                else:
+                    if not unreinforced is None:
+                        pins = [odors2left_pins[unreinforced],
+                                odors2right_pins[reinforced]]
+                    else:
+                        pins = [odors2right_pins[reinforced]]
+        # end solvent_only if
 
         # work for zero length pins?
         for p in pins:
@@ -731,18 +766,20 @@ class StimuliGenerator:
                 return [right_shock], [transition]
 
 
-    def test(self):
+    def test(self, solvent_only=False):
         start = self.current_t0
 
-        pins, seq = self.odor_transitions()
-        if odor_side_order == 'alternating':
-            # TODO TODO rename current_side_is_left to indicate that it also
-            # controls whether the current training trial uses the reinforced
-            # odor or the non-reinforced odor. it does, right?
-            self.current_side_is_left = not self.current_side_is_left 
+        pins, seq = self.odor_transitions(solvent_only=solvent_only)
 
-        elif odor_side_order == 'random':
-            self.current_side_is_left = random.choice([True, False])
+        if not solvent_only:
+            if odor_side_order == 'alternating':
+                # TODO TODO rename current_side_is_left to indicate that it also
+                # controls whether the current training trial uses the
+                # reinforced odor or the non-reinforced odor. it does, right?
+                self.current_side_is_left = not self.current_side_is_left 
+
+            elif odor_side_order == 'random':
+                self.current_side_is_left = random.choice([True, False])
 
         pins_to_signal = []
 
@@ -796,37 +833,48 @@ gen = StimuliGenerator()
 # internally increments this time.
 t0_sec = gen.current_t0.to_sec()
 
+trial_structure = [gen.delay(prestimulus_delay_s)]
+
+if flanking_solvent_test_blocks == 1:
+    trial_structure += [gen.test(solvent_only=True)]
+    if not solvent_test_to_first_test_s is None:
+        trial_structure += [gen.delay(solvent_test_to_first_test_s)]
+
 if have_training_params:
     # TODO factor out code to accommodate variable number of training blocks for
     # testing blocks?
-    trial_structure = [gen.delay(prestimulus_delay_s)] + \
-                      ([] if (pretest_to_train_s is None) else
-                       [gen.test(),
-                        gen.delay(pretest_to_train_s)]) + \
-                      ((flatten([[f(), gen.delay(inter_train_interval_s)] for f
-                        in [gen.train] * (training_blocks - 1)]) + \
-                      [gen.train()]) if training_blocks > 0 else []) + \
-                      [gen.delay(train_to_posttest_s),
-                       gen.test(),
-                       gen.delay(beyond_posttest_s)]
+    trial_structure += ([] if (pretest_to_train_s is None) else
+                        [gen.test(),
+                         gen.delay(pretest_to_train_s)]) + \
+                       ((flatten([[f(), gen.delay(inter_train_interval_s)] for f
+                         in [gen.train] * (training_blocks - 1)]) + \
+                        [gen.train()]) if training_blocks > 0 else []) + \
+                       [gen.delay(train_to_posttest_s),
+                        gen.test()]
 
     # TODO handle this concurrently w/ trial_structure generation, to make sure
     # they are always consistent?
     epoch_labels = ['test'] + ['train'] * training_blocks + ['test']
 
 elif have_testonly_params:
-    # TODO looks like case where testing_blocks = 1 might have extra long
-    # posttest period (=beyond_post_test_s + inter_test_interval_s). fix
+    # TODO looks like case where testing_blocks == 1 might have extra long
+    # posttest period (=beyond_post_test_s + inter_test_interval_s). fix if so
+    # TODO should i really support testing_blocks == 0 case?
     trial_structure = [gen.delay(prestimulus_delay_s)] + \
                       ((flatten([[f(), gen.delay(inter_test_interval_s)] for f
                         in [gen.test] * (testing_blocks - 1)]) + \
-                      [gen.test()]) if testing_blocks > 0 else []) + \
-                      [gen.delay(beyond_posttest_s)]
+                      [gen.test()]) if testing_blocks > 0 else [])
     epoch_labels = ['test']  * testing_blocks
+
+if flanking_solvent_test_blocks == 1:
+    if not last_test_to_solvent_test_s is None:
+        trial_structure += [gen.delay(last_test_to_solvent_test_s)]
+    trial_structure += [gen.test(solvent_only=True)]
+
+trial_structure += [gen.delay(beyond_posttest_s)]
 
 # TODO even if not printed to /rosout, is this saved by default?
 # (seems like no)
-print('trial_structure', trial_structure)
 rospy.logdebug('trial_structure', trial_structure)
 rospy.logdebug('epoch_labels', epoch_labels)
 
