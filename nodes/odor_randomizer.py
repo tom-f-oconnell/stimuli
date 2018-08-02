@@ -834,9 +834,11 @@ gen = StimuliGenerator()
 t0_sec = gen.current_t0.to_sec()
 
 trial_structure = [gen.delay(prestimulus_delay_s)]
+epoch_labels = []
 
 if flanking_solvent_test_blocks == 1:
     trial_structure += [gen.test(solvent_only=True)]
+    epoch_labels += ['solvent vs. solvent test']
     if not solvent_test_to_first_test_s is None:
         trial_structure += [gen.delay(solvent_test_to_first_test_s)]
 
@@ -854,22 +856,22 @@ if have_training_params:
 
     # TODO handle this concurrently w/ trial_structure generation, to make sure
     # they are always consistent?
-    epoch_labels = ['test'] + ['train'] * training_blocks + ['test']
+    epoch_labels += ['test'] + ['train'] * training_blocks + ['test']
 
 elif have_testonly_params:
     # TODO looks like case where testing_blocks == 1 might have extra long
     # posttest period (=beyond_post_test_s + inter_test_interval_s). fix if so
     # TODO should i really support testing_blocks == 0 case?
-    trial_structure = [gen.delay(prestimulus_delay_s)] + \
-                      ((flatten([[f(), gen.delay(inter_test_interval_s)] for f
-                        in [gen.test] * (testing_blocks - 1)]) + \
-                      [gen.test()]) if testing_blocks > 0 else [])
-    epoch_labels = ['test']  * testing_blocks
+    trial_structure += ((flatten([[f(), gen.delay(inter_test_interval_s)] for f
+                         in [gen.test] * (testing_blocks - 1)]) +
+                         [gen.test()]) if testing_blocks > 0 else [])
+    epoch_labels += ['test']  * testing_blocks
 
 if flanking_solvent_test_blocks == 1:
     if not last_test_to_solvent_test_s is None:
         trial_structure += [gen.delay(last_test_to_solvent_test_s)]
     trial_structure += [gen.test(solvent_only=True)]
+    epoch_labels += ['solvent vs. solvent test']
 
 trial_structure += [gen.delay(beyond_posttest_s)]
 
@@ -1023,6 +1025,7 @@ else:
     rospy.logwarn('Not saving generated trial structure ' +
         '/ pin to odor mappings!')
 
+# TODO option to play this quickly for testing purposes
 stimuli_loader = StimuliLoader(default_states, trial_structure,
     epoch_labels=epoch_labels)
 

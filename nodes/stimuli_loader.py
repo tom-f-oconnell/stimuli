@@ -50,7 +50,10 @@ class StimuliLoader:
                 try:
                     rospy.logdebug(block)
                     if not epoch_labels is None:
-                        rospy.loginfo(epoch_labels[block_num])
+                        try:
+                            rospy.loginfo(epoch_labels[block_num])
+                        except IndexError:
+                            rospy.logwarn('Not enough stimulus epoch labels.')
 
                     block.header.stamp = rospy.Time.now()
                     # TODO TODO why does this seem to selectively block forever
