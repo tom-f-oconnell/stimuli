@@ -296,13 +296,12 @@ else:
              'you must specify left_pin and right_pin under each element in ' +
              "the parameter 'olf/odors'.")
 
-
 if balance_normally_flowing is None:
+    balance_normally_flowing = True
+else:
     if left_balance is None or right_balance is None:
         raise ValueError('need to specify balance pins (olf/left_balance and ' +
             'olf/right_balance) when olf/balance_normally_flowing is set')
-    else:
-        balance_normally_flowing = True
 
 if not (left_balance is None or right_balance is None):
     balances = True
