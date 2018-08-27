@@ -231,7 +231,6 @@ last_test_to_solvent_test_s = params['olf/last_test_to_solvent_test_s']
 assert len(odors_and_pins) > 0, \
     'List of odors can not be empty. See docs for format.'
 
-solvent_specified = False
 solvent = None
 for odor in odors_and_pins:
     if not (type(odor) is dict) or len(odor.keys()) == 0:
@@ -254,11 +253,10 @@ for odor in odors_and_pins:
                 "in an entry under 'olf/odors' parameter.")
 
     if 'solvent' in odor.keys() and odor['solvent']:
-        if solvent_specified:
+        if solvent is not None:
             raise NotImplementedError('Currently only support specifying one ' +
                 'solvent in olf/odors list.')
          
-        solvent_specified = True
         solvent = (odor['name'], odor['vial_log10_concentration'])
 
 if flanking_solvent_test_blocks > 0:
@@ -266,7 +264,7 @@ if flanking_solvent_test_blocks > 0:
         raise NotImplementedError('Currently only support one solvent only ' +
             'test on either end.')
 
-    if not solvent_specified:
+    if solvent is None:
         raise ValueError('One entry in olf/odors must include "solvent: True"' +
             ', if have flanking solvent tests.')
 
@@ -346,7 +344,8 @@ optional_training_params = {
 
     # TODO TODO handle case where this is not present, or provide another means
     # of only having a post test
-    'olf/pretest_to_train_s': None
+    'olf/pretest_to_train_s': None,
+    'olf/shock_solvent_sometimes': True
 }
 
 have_training_params = \
@@ -390,6 +389,9 @@ if have_training_params:
     if not train_with_cs_minus:
         assert train_one_odor_at_a_time
 
+if params['olf/shock_solvent_sometimes'] and solvent is None:
+    raise ValueError('Can not shock solvent sometimes if no solvent ' +
+        'is specified. Add "solvent: True" to the solvent in olf/odors')
 
 ###############################################################################
 # Parameters unique to experiments with NO reinforcement
@@ -564,6 +566,11 @@ if len(odors) == 1:
     # more odor pairings than can be tested in one experiment in config, i need
     # to make that handling consistent with this case.
     reinforced = odors[0]
+
+    if not params['olf/shock_solvent_sometimes'] and reinforced == solvent:
+        raise ValueError('Only specified one odor, which was solvent, but ' +
+            'also said not to shock solvent. No training can happen.')
+
     if ('against_itself' in odors_and_pins[0] and
         odors_and_pins[0]['against_itself']):
 
@@ -590,8 +597,21 @@ else:
             raise NotImplementedError(
                 "currently only support 'against_itself' option for one odor")
 
-    # TODO rename (because sometimes we don't have any training trials?)
-    reinforced, unreinforced = random.sample(odors, 2)
+    # TODO rename reinforced/unreinforced (because sometimes we don't have any
+    # training trials)
+    reinforced_odor_candidates = list(odors)
+    if not params['olf/shock_solvent_sometimes']:
+        # TODO test
+        reinforced_odor_candidates.remove(solvent)
+
+    assert len(reinforced_odor_candidates) > 0, 'Expected odors to shock'
+    reinforced = random.choice(reinforced_odor_candidates)
+
+    unreinforced_odor_candidates = list(odors)
+    unreinforced_odor_candidates.remove(reinforced)
+    assert len(unreinforced_odor_candidates) > 0, \
+        'Expected unreinforced odor candidates.'
+    unreinforced = random.choice(unreinforced_odor_candidates)
 
 if have_training_params:
         # TODO TODO fix to accomodate 'against_itself' case + 1 odor against
@@ -606,7 +626,7 @@ if have_training_params:
 # starting stimuli)
 wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
-    ros_friendly_raw_input('Press Enter when the odor vials are connected.\n')
+    ros_friendly_raw_input('Press Enter to start stimulus program.\n')
 
 
 # TODO TODO TODO make sure randomness isn't broken here, and that the mappings
