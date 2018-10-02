@@ -336,6 +336,7 @@ optional_training_params = {
     # TODO implement support for negative delays?
     'zap/delay_from_odor_onset_ms': 0,
 
+    'zap/power_supply_enable_pin': None,
     # TODO update definitions other places to use these parameter names
     'zap/left_control_pin': None,
     'zap/right_control_pin': None,
@@ -355,6 +356,7 @@ if have_training_params:
     left_shock = params['zap/left_control_pin']
     right_shock = params['zap/right_control_pin']
     all_shock = params['zap/control_pin']
+    power_supply_enable_pin = params['zap/power_supply_enable_pin']
 
     have_left = not (left_shock is None)
     have_right = not (right_shock is None)
@@ -665,9 +667,6 @@ class StimuliGenerator:
         """
         TODO
         """
-        # setting ms_on to 1 to emphasize duration is determined by end time set
-        # of the Sequence and the pin will go low if that is the DefaultState
-        # for the pin
         odor_pulse = State(ms_on=odor_pulse_ms, ms_off=post_pulse_ms)
         # don't need explicit low transition because default state is low
         # but end time in Sequence message must be set correctly
@@ -751,13 +750,24 @@ class StimuliGenerator:
         transition = Transition(self.current_t0 + 
             rospy.Duration(onset_delay_ms / 1000.0), square_wave)
 
+        pins = []
+        pin_transitions = []
+
+        if power_supply_enable_pin is not None:
+            always_on = State(ms_on=1, ms_off=0)
+            supply_enbl_transition = Transition(self.current_t0, always_on)
+            pins.append(power_supply_enable_pin)
+            pin_transitions.append(supply_enbl_transition)
+
         if train_one_odor_at_a_time:
             if not train_with_cs_minus:
                 # TODO maybe refactor a little to avoid this duplication
                 if one_pin_shock:
-                    return [all_shock], [transition]
+                    pins.append(all_shock)
+                    pin_transitions.append(transition)
                 else:
-                    return [left_shock, right_shock], [transition, transition]
+                    pins += [left_shock, right_shock]
+                    pin_transitions += [transition, transition]
 
             # when train_one_odor_at_a_time is True, current_side_is_left
             # indicates whether the current training epoch will use the
@@ -768,9 +778,11 @@ class StimuliGenerator:
                     # TODO what happens on the Arduino if it is given a
                     # duplicate of a transition? does it behave appropriately or
                     # fail?
-                    return [all_shock], [transition]
+                    pins.append(all_shock)
+                    pin_transitions.append(transition)
                 else:
-                    return [left_shock, right_shock], [transition, transition]
+                    pins += [left_shock, right_shock]
+                    pin_transitions += [transition, transition]
             else:
                 return [], []
 
@@ -780,9 +792,13 @@ class StimuliGenerator:
                     'zap/right_shock, if train_one_odor_at_a_time is False')
 
             if self.current_side_is_left:
-                return [left_shock], [transition]
+                pins.append(left_shock)
+                pin_transitions.append(transition)
             else:
-                return [right_shock], [transition]
+                pins.append(right_shock)
+                pin_transitions.append(transition)
+
+        return pins, pin_transitions
 
 
     def test(self, solvent_only=False):
@@ -909,6 +925,9 @@ if have_training_params:
         low_pins += [all_shock]
     else:
         low_pins += [left_shock, right_shock]
+
+    if power_supply_enable_pin is not None:
+        low_pins += [power_supply_enable_pin]
 
 high_pins = []
 if balances:
