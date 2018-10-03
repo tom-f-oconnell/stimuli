@@ -352,11 +352,18 @@ optional_training_params = {
 have_training_params = \
     get_params(params, required_training_params, optional_training_params)
 
+all_pins = left_pins + right_pins
+if balances:
+    all_pins.append(left_balance)
+    all_pins.append(right_balance)
+
 if have_training_params:
     left_shock = params['zap/left_control_pin']
     right_shock = params['zap/right_control_pin']
     all_shock = params['zap/control_pin']
     power_supply_enable_pin = params['zap/power_supply_enable_pin']
+    if power_supply_enable_pin is not None:
+        all_pins.append(power_supply_enable_pin)
 
     have_left = not (left_shock is None)
     have_right = not (right_shock is None)
@@ -371,8 +378,10 @@ if have_training_params:
 
     elif have_one_pin:
         one_pin_shock = True
+        all_pins.append(all_shock)
     else:
         one_pin_shock = False
+        all_pins += [left_shock, right_shock]
 
     training_blocks = params['olf/training_blocks']
     
@@ -394,6 +403,10 @@ if have_training_params:
 if params['olf/shock_solvent_sometimes'] and solvent is None:
     raise ValueError('Can not shock solvent sometimes if no solvent ' +
         'is specified. Add "solvent: True" to the solvent in olf/odors')
+
+if len(all_pins) > len(set(all_pins)):
+    raise ValueError('Some pins specified as controlling more than one thing.' +
+        ' This is unsupported. Fix parameters.')
 
 ###############################################################################
 # Parameters unique to experiments with NO reinforcement
