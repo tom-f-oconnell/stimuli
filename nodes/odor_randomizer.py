@@ -189,6 +189,7 @@ optional_params = {
     'olf/left_balance': None,
     'olf/right_balance': None,
     'olf/odor_side_order': 'alternating',
+    'olf/initial_odor_side': None,
     # If False, always loads existing mappings, if they are present.
     'olf/prompt_to_regen_connections': False,
     # Relative to the last experiment run.
@@ -288,6 +289,8 @@ if random_valve_connections:
             "'olf/random_valve_connections' to False.")
 
 else:
+    # TODO TODO support assymetric setups (for Dhruv), where odor may have only
+    # either a left_pin or a right_pin...
     for odor in odors_and_pins:
         assert (('left_pin' in odor) and ('right_pin' in odor)), \
             ('If not randomizing connections between odor vials and valves, ' +
@@ -309,6 +312,16 @@ else:
 if not (odor_side_order == 'alternating' or odor_side_order == 'random'):
     raise ValueError("olf/odor_side_order must be either 'random' or " + 
         "'alternating'")
+
+initial_side = params['olf/initial_odor_side']
+if initial_side is not None:
+    if odor_side_order == 'random':
+        raise ValueError('initial_odor_side only valid for alternating case')
+
+    initial_side = initial_side.lower()
+
+    if not (initial_side in ('left','right')):
+        raise ValueError('initial_odor_side must be either left or right')
 
 
 # TODO TODO TODO print out any unrecognized params in some namespace(s)
@@ -412,6 +425,8 @@ if len(all_pins) > len(set(all_pins)):
 # Parameters unique to experiments with NO reinforcement
 # (only repeating the same test, over and over)
 ###############################################################################
+
+# TODO make 1 testing block case supported, and have interval optional there
 required_testonly_params = {
     'olf/testing_blocks',
     'olf/inter_test_interval_s'
@@ -435,6 +450,8 @@ odors = [(x['name'], x['vial_log10_concentration']) for x in odors_and_pins]
 
 if not random_valve_connections:
     # should lead to them being indexed as the odors in the list above
+    # TODO just move this before / same place as other definitions, so
+    # left/right_pins are optional in this case
     # TODO test
     left_pins = [x['left_pin'] for x in odors_and_pins]
     right_pins = [x['right_pin'] for x in odors_and_pins]
@@ -673,7 +690,14 @@ class StimuliGenerator:
         self.current_t0 = rospy.Time.now()
 
         # only do this for 'alternating' mode?
-        self.current_side_is_left = random.choice([True, False])
+        if initial_side is None:
+            self.current_side_is_left = random.choice([True, False])
+        else:
+            # TODO TODO check this isn't flipped in first block!
+            if initial_side == 'left':
+                self.current_side_is_left = True
+            elif initial_side == 'right':
+                self.current_side_is_left = False
 
     # currently just on all the time. maybe i want something else?
     def odor_transitions(self, train=False, solvent_only=False):
