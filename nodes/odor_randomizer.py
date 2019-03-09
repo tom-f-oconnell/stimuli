@@ -323,6 +323,10 @@ if initial_side is not None:
     if not (initial_side in ('left','right')):
         raise ValueError('initial_odor_side must be either left or right')
 
+    # TODO delete after debugging
+    print('USING FIXED INITIAL SIDE: {}'.format(initial_side))
+    #
+
 
 # TODO TODO TODO print out any unrecognized params in some namespace(s)
 # maybe just olf and zap, maybe consolidate
@@ -632,7 +636,7 @@ else:
     # TODO rename reinforced/unreinforced (because sometimes we don't have any
     # training trials)
     reinforced_odor_candidates = list(odors)
-    if not params['olf/shock_solvent_sometimes']:
+    if have_testonly_params or not params['olf/shock_solvent_sometimes']:
         # TODO test
         reinforced_odor_candidates.remove(solvent)
 
@@ -644,6 +648,12 @@ else:
     assert len(unreinforced_odor_candidates) > 0, \
         'Expected unreinforced odor candidates.'
     unreinforced = random.choice(unreinforced_odor_candidates)
+
+# TODO delete me
+print('unreinforced', unreinforced)
+print('reinforced', reinforced)
+sys.exit()
+#
 
 if have_training_params:
         # TODO TODO fix to accomodate 'against_itself' case + 1 odor against
