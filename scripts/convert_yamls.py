@@ -30,8 +30,14 @@ for orig_yaml in from_f1 + from_f2:
     with open(orig_yaml, 'r') as f:
         data_dict = yaml.load(f)
 
+    already_converted = False
     for s in ('left', 'right'):
-        odors2pins = data_dict.pop('odors2{}_pins'.format(s))
+        try:
+            odors2pins = data_dict.pop('odors2{}_pins'.format(s))
+
+        except KeyError:
+            already_converted = True
+            break
 
         # inverting the dictionary, and converting tuple to standard list type,
         # so that the dict can be represented in a wider selection of yaml
@@ -42,6 +48,8 @@ for orig_yaml in from_f1 + from_f2:
 
         data_dict['{}_pins2odors'.format(s)] = pins2odors
 
-    with open(orig_yaml, 'w') as f:
-        yaml.dump(data_dict, f)
+    if not already_converted:
+        print('converting {}'.format(orig_yaml))
+        with open(orig_yaml, 'w') as f:
+            yaml.dump(data_dict, f)
 
