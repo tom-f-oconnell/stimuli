@@ -147,7 +147,7 @@ else:
     intertrial_delay = rospy.Duration(intertrial_delay_s)
 
 # TODO TODO TODO fix hack / at least make conditional on invert bool flag
-#odor_pins = odor_pins + balance_pins
+odor_pins = odor_pins + balance_pins
 
 for i in range(n_trials):
     start = u.copy_rostime(t_curr)
@@ -166,9 +166,7 @@ for i in range(n_trials):
 
     # TODO test that pulses this long actually work (~50s off)
     odor_pulse = State(ms_on=odor_pulse_ms, ms_off=post_pulse_ms)
-    #transitions = [Transition(t_start, odor_pulse)] * len(odor_pins)
-    transitions = [Transition(t_start + rospy.Duration(j), odor_pulse)
-        for j in range(len(odor_pins))] * len(odor_pins)
+    transitions = [Transition(t_start, odor_pulse)] * len(odor_pins)
 
     if lump_pre_pulse_into_delays:
         t_curr += rospy.Duration(pulse_and_post_duration_s)
