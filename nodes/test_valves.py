@@ -1,25 +1,31 @@
 #!/usr/bin/env python
 
+# TODO TODO document how test_valves.py and test_stimulus.py are different
+# (or delete one if not meaningfully diff...)
+
 import rospy
 from std_msgs.msg import Header
+
 from stimuli.msg import Sequence, Transition, State, DefaultState
 from stimuli.srv import LoadDefaultStates, LoadSequence, LoadSequenceRequest
+import stimuli.util as u
+
 
 class ValveTester:
     def __init__(self):
         rospy.init_node('valve_tester')
 
-        self.pin2name = dict(zip(range(54, 70), \
-            ['A' + str(i) for i in range(16)]))
         rospy.loginfo('valve_tester waiting for services')
         defaults_service_name = 'load_defaults'
         sequence_service_name = 'load_seq'
         rospy.wait_for_service(defaults_service_name)
         rospy.wait_for_service(sequence_service_name)
-        load_defaults = rospy.ServiceProxy(defaults_service_name, \
-            LoadDefaultStates)
-        load_next_sequence = rospy.ServiceProxy(sequence_service_name, \
-            LoadSequence)
+        load_defaults = rospy.ServiceProxy(defaults_service_name,
+            LoadDefaultStates
+        )
+        load_next_sequence = rospy.ServiceProxy(sequence_service_name,
+            LoadSequence
+        )
 
         # to allow arduino to get parameters before services are called
         # (so that debug flag can be in effect during services)
@@ -38,13 +44,13 @@ class ValveTester:
 
         pins_to_test = sorted(left_pins + right_pins)
         if len(pins_to_test) == 0:
-            raise ValueError('need some pins to test. specify olf/right_pins '+\
-                'and olf/left_pins as ROS parameters that are lists of ' + \
-                'integers.')
+            raise ValueError('need some pins to test. specify olf/right_pins '
+                'and olf/left_pins as ROS parameters that are lists of '
+                'integers.'
+            )
 
         # all the valves should have their control pins LOW by default (0v)
-        default_states = [DefaultState(p, False) for p in \
-            set(pins_to_test)]
+        default_states = [DefaultState(p, False) for p in set(pins_to_test)]
 
         try:
             h = Header()
@@ -52,7 +58,7 @@ class ValveTester:
             resp = load_defaults(h, default_states)
 
         except rospy.ServiceException as exc:
-            rospy.logerr("Service load_defaults failed: " + str(exc))
+            rospy.logerr('Service load_defaults failed: ' + str(exc))
         rospy.loginfo('valve_tester finished sending default states')
         
         block_num = 0
@@ -68,15 +74,16 @@ class ValveTester:
                 end = now + rospy.Duration.from_sec(2.0)
                 high = Transition(t=start, s=State(ms_on=1, ms_off=0))
                 seq = Sequence(start=start, end=end, pins=[p], seq=[high])
-                this_pin_high = LoadSequenceRequest(header=h, seq=seq, \
-                    pins_to_signal=[])
-
-                print('pin ' + str(p))
+                this_pin_high = LoadSequenceRequest(header=h, seq=seq,
+                    pins_to_signal=[]
+                )
+                print('pin ' + str(u.pin_label(p)))
                 try:
                     resp = load_next_sequence(this_pin_high)
                 except rospy.ServiceException as exc:
-                    rospy.logerr("Service load_next_sequence failed: " + \
-                        str(exc))
+                    rospy.logerr('Service load_next_sequence failed: ' +
+                        str(exc)
+                    )
 
                 # TODO does it always sleep the period, or try to maintain
                 # period across all calls?
@@ -85,3 +92,4 @@ class ValveTester:
 
 if __name__ == '__main__':
     s = ValveTester()
+

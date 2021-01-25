@@ -9,7 +9,9 @@
     <!-- TODO figure out how to autodetect and use hw id / software to identify
          by function -->
     <param name="port" value="$(arg port)" type="str" />
-    <param name="baud" value="9600" />
+
+    <param name="baud" value="115200" />
+
     <param name="sync_timeout" value="False" type="bool" />
 
     <!-- TODO test it fails / how if not advertised -->

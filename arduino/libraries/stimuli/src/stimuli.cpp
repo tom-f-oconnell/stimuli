@@ -12,8 +12,6 @@
     #include <WProgram.h>
 #endif
 
-// TODO include appropriate types header
-
 #include <avr/wdt.h>
 #include <ros.h>
 // what happens if this isn't included?
@@ -197,11 +195,15 @@ namespace stim {
       // TODO TODO TODO shouldn't i be either explicitly finding the min here,
       // or using start (which is / should be guaranteed to be min?) just
       // guarantee sorting?
+      // TODO are above comments still relevant? am i not finding the min in the
+      // loop below?
       soonest_ms = to_millis(req.seq.seq[0].t);
       
       stimuli::Transition curr;
       unsigned long curr_ms;
 
+      // TODO summarize what this loop is doing. does it make sense to use `j`
+      // like i am?
       // TODO maybe assert seq.seq and seq.pins have same length?
       unsigned char j = 0;
       // TODO TODO make diff types just to check that i'm not comparing offset
@@ -248,10 +250,13 @@ namespace stim {
           next_time_ms[j] = curr_ms - rostime_millis_offset;
           if (curr_ms < soonest_ms) {
             soonest_ms = curr_ms;
+            // TODO don't want to store index of which one is the soonest?
           }
           j++;
         }
       }
+      // TODO does the above loop really completely initialize next_time_ms?
+      // print to check?
       last_state_index[j] = req.seq.seq_length;
       soonest_ms = soonest_ms - rostime_millis_offset;
 
@@ -390,6 +395,7 @@ namespace stim {
 
       success = get_param("olf/max_num_pins", &their_max);
       if (!success) {
+        // TODO TODO might want to replace this w/ fail(...)
         return false;
       }
       if (their_max > max_num_pins) {
@@ -465,7 +471,7 @@ namespace stim {
       for (int i=0; i<max_num_pins; i++) {
         if (pins[i] != pin_not_set) {
           if (next_state[i] != not_pwm) {
-            // TODO make robust to rollover
+            // TODO make robust to rollover (/ check that it is)
             if (next_time_ms[i] <= millis()) {
               // TODO maybe use port manipulation
               digitalWrite(pins[i], next_state[i]);
@@ -660,7 +666,9 @@ namespace stim {
       init_state();
       // ever a chance of these first two calls taking > WDT_RESET?
       // i could limit their timeouts to prevent that?
-      nh.getHardware()->setBaud(9600);
+      // TODO probably change back if this doesn't fix the timeout
+      //nh.getHardware()->setBaud(9600);
+      nh.getHardware()->setBaud(115200);
       nh.initNode();
       
       nh.spinOnce();
@@ -692,6 +700,7 @@ namespace stim {
 
       if (pulse_registered) {
         if (start_ms <= millis()) {
+          // Before this returns, it should set pulse_registered back to false.
           update_pulses_blocking();
         }
         /* else if (start_ms - signal_ms_before <= millis()) {
@@ -700,12 +709,14 @@ namespace stim {
           nh.logwarn("done with that");
         }*/
       }
+      // TODO should i be nh.spinOnce-ing here?
     }
 
     ros::NodeHandle * get_nodehandle() {
         return &nh;
     }
 
+    // TODO what was the intention for this again? delete?
     void while_idle(func_ptr f) {
         while_idle_fn = f;
     }

@@ -4,153 +4,24 @@ from __future__ import division
 from __future__ import print_function
 
 import random
-import datetime
 import time
 import os
-import sys
 import pickle
 
-import numpy as np
 import rospy
 from std_msgs.msg import Header
 import yaml
 
 from stimuli.msg import Sequence, Transition, State, DefaultState
 from stimuli.srv import LoadSequenceRequest
-from stimuli_loader import StimuliLoader
-
-
-# TODO test. this seems to maybe be incorrectly returning True sometimes?
-def get_params(param_dict, required_params, default_params):
-    """Fills param_dict values with the values each key has on the ROS parameter
-    server. Raises errors if these invalid combinations of parameters are
-    found:
-        - some, but not all, of required_params
-        - any default_params, but not all required_params
-
-    Args:
-        param_dict (dict): 
-        required_params (set): 
-        default_params (dict):
-
-    Returns whether any parameters were found.
-    """
-    def get_params_helper(params_to_get):
-        found = set()
-        not_found = set()
-
-        if type(params_to_get) is dict:
-            defaults = True
-        else:
-            defaults = False
-
-        for k in params_to_get:
-            try:
-                v = rospy.get_param(k)
-                assert not k in param_dict, '{} already in param_dict'.format(k)
-                param_dict[k] = v
-                found.add(k)
-            except KeyError as e:
-                not_found.add(k)
-                if defaults:
-                    param_dict[k] = params_to_get[k]
-
-        return found, not_found
-
-    def missing_params_err_msg():
-        error_msg = ''
-        for p in required_params:
-            error_msg += '{}\n'.format(p)
-        error_msg += '\nThe following were missing:\n'
-        for p in required_not_found:
-            error_msg += '{}\n'.format(p)
-        return error_msg
-        
-    # TODO provide mechanism to validate types / ranges as well?
-
-    required_found, required_not_found = get_params_helper(required_params)
-    if len(required_found) > 0 and len(required_found) < len(required_params):
-        error_msg = 'If any of the following parameters are specified, ' + \
-            'they all must be:\n'
-        error_msg += missing_params_err_msg()
-
-        # TODO is the convention to have the error message describe the whole
-        # problem, or to print stuff out before the error and then have a short
-        # error message?
-        raise ValueError(error_msg)
-
-    defaults_found, _ = get_params_helper(default_params)
-    # if len(required_found) > 0, there would already have been an error
-    if len(defaults_found) > 0 and len(required_found) == 0:
-        error_msg = 'Since {} were set, the '.format(defaults_found) + \
-            'following are required:\n'
-        error_msg += missing_params_err_msg()
-
-        raise ValueError(error_msg)
-
-    return len(defaults_found) > 0 or len(required_found) > 0
-
-
-# TODO maybe define this in a general utility library? (unix specific?)
-def nonblocking_raw_input(prompt, timeout_s=1):
-    """Returns None if timeout, otherwise behaves as raw_input.
-
-    Unix specific.
-
-    Need to use signal.setitimer if I want better than 1s resolution.
-
-    See jer's answer here:
-    https://stackoverflow.com/questions/2933399/how-to-set-time-limit-on-raw-input
-    """
-    import signal
-
-    class AlarmException(Exception):
-        pass
-
-    def alarm_handler(signum, frame):
-        raise AlarmException
-
-    signal.signal(signal.SIGALRM, alarm_handler)
-    signal.alarm(timeout_s)
-    try:
-        text = raw_input(prompt)
-        signal.alarm(0)
-        return text
-
-    except AlarmException:
-        pass
-
-    signal.signal(signal.SIGALRM, signal.SIG_IGN)
-    return None
-
-
-def ros_friendly_raw_input(prompt):
-    """raw_input that periodically polls for input and checks for ROS shutdown.
-
-    If ROS is shutdown while blocking, calls sys.exit()
-    """
-    not_shown_prompt = True
-    while not rospy.is_shutdown():
-        if not_shown_prompt:
-            out = nonblocking_raw_input(prompt)
-            not_shown_prompt = False
-        else:
-            out = nonblocking_raw_input('')
-
-        if not (out is None):
-            return out
-
-        # to not take up as much resources
-        # not sure if it'd make much of a difference
-        time.sleep(0.1)
-
-    sys.exit()
+from stimuli.stimuli_loader import StimuliLoader
+import stimuli.util as u
 
 
 # TODO provide a function in this file that stimuli_loader can call and pass a
 # parameter indicating where to find the containing file to stimuli_loader?
 # then move the node maintenance stuff to there?
-rospy.init_node('stimuli')
+rospy.init_node('two_choice_stimuli')
 
 # TODO make parameter for this?
 save_stimulus_info = True
@@ -199,7 +70,8 @@ optional_params = {
     'olf/last_test_to_solvent_test_s': None
 }
 
-get_params(params, required_params, optional_params)
+params = dict()
+u.get_params(params, required_params, optional_params)
 
 left_pins = params['olf/left_pins']
 right_pins = params['olf/right_pins']
@@ -235,8 +107,9 @@ assert len(odors_and_pins) > 0, \
 solvent = None
 for odor in odors_and_pins:
     if not (type(odor) is dict) or len(odor.keys()) == 0:
-        raise ValueError("each entry of 'olf/odors' parameter should parse as" +
-            " non-empty dictionary")
+        raise ValueError("each entry of 'olf/odors' parameter should parse as"
+            " non-empty dictionary"
+        )
 
     if not 'name' in odor.keys():
         raise ValueError("Each 'olf/odors' entry needs a key 'name: X'")
@@ -251,24 +124,27 @@ for odor in odors_and_pins:
             'left_pin', 'right_pin', 'against_itself', 'solvent'}:
 
             raise ValueError('Did not recognize key {}'.format(k) +
-                "in an entry under 'olf/odors' parameter.")
+                "in an entry under 'olf/odors' parameter."
+            )
 
     if 'solvent' in odor.keys() and odor['solvent']:
         if solvent is not None:
-            raise NotImplementedError('Currently only support specifying one ' +
-                'solvent in olf/odors list.')
+            raise NotImplementedError('Currently only support specifying one '
+                'solvent in olf/odors list.'
+            )
          
         solvent = (odor['name'], odor['vial_log10_concentration'])
 
 if flanking_solvent_test_blocks > 0:
     if flanking_solvent_test_blocks > 1:
-        raise NotImplementedError('Currently only support one solvent only ' +
-            'test on either end.')
+        raise NotImplementedError('Currently only support one solvent only '
+            'test on either end.'
+        )
 
     if solvent is None:
-        raise ValueError('One entry in olf/odors must include "solvent: True"' +
-            ', if have flanking solvent tests.')
-
+        raise ValueError('One entry in olf/odors must include "solvent: True"'
+            ', if have flanking solvent tests.'
+        )
         if solvent_test_to_first_test_s is None:
             raise ValueError('Specify olf/solvent_test_to_first_test_s')
 
@@ -282,10 +158,10 @@ if flanking_solvent_test_blocks > 0:
 if random_valve_connections:
     for odor in odors_and_pins:
         assert not (('left_pin' in odor) or ('right_pin' in odor)), \
-            ('All odors must be randomized if ' +
-            'olf/random_valve_connections is True, so do not specify ' +
-            'left_pin / right_pin for any of the odors in the list under the' +
-            " 'olf/odors' parameter. Otherwise, set " +
+            ('All odors must be randomized if '
+            'olf/random_valve_connections is True, so do not specify '
+            'left_pin / right_pin for any of the odors in the list under the'
+            " 'olf/odors' parameter. Otherwise, set "
             "'olf/random_valve_connections' to False.")
 
 else:
@@ -293,16 +169,17 @@ else:
     # either a left_pin or a right_pin...
     for odor in odors_and_pins:
         assert (('left_pin' in odor) and ('right_pin' in odor)), \
-            ('If not randomizing connections between odor vials and valves, ' +
-             'you must specify left_pin and right_pin under each element in ' +
+            ('If not randomizing connections between odor vials and valves, '
+             'you must specify left_pin and right_pin under each element in '
              "the parameter 'olf/odors'.")
 
 if balance_normally_flowing is None:
     balance_normally_flowing = True
 else:
     if left_balance is None or right_balance is None:
-        raise ValueError('need to specify balance pins (olf/left_balance and ' +
-            'olf/right_balance) when olf/balance_normally_flowing is set')
+        raise ValueError('need to specify balance pins (olf/left_balance and '
+            'olf/right_balance) when olf/balance_normally_flowing is set'
+        )
 
 if not (left_balance is None or right_balance is None):
     balances = True
@@ -310,8 +187,9 @@ else:
     balances = False
 
 if not (odor_side_order == 'alternating' or odor_side_order == 'random'):
-    raise ValueError("olf/odor_side_order must be either 'random' or " + 
-        "'alternating'")
+    raise ValueError("olf/odor_side_order must be either 'random' or "
+        "'alternating'"
+    )
 
 initial_side = params['olf/initial_odor_side']
 if initial_side is not None:
@@ -366,8 +244,9 @@ optional_training_params = {
     'olf/shock_solvent_sometimes': True
 }
 
-have_training_params = \
-    get_params(params, required_training_params, optional_training_params)
+have_training_params = u.get_params(params, required_training_params,
+    optional_training_params
+)
 
 all_pins = left_pins + right_pins
 if balances:
@@ -390,9 +269,9 @@ if have_training_params:
         (have_left and not have_right) or (have_right and not have_left) or 
         have_one_pin and (have_left or have_right)):
 
-        raise ValueError('only set either the parameters zap/control_pin or' + 
-            ' both zap/left_control_pin and zap/right_control_pin')
-
+        raise ValueError('only set either the parameters zap/control_pin or'
+            ' both zap/left_control_pin and zap/right_control_pin'
+        )
     elif have_one_pin:
         one_pin_shock = True
         all_pins.append(all_shock)
@@ -418,12 +297,14 @@ if have_training_params:
         assert train_one_odor_at_a_time
 
 if params['olf/shock_solvent_sometimes'] and solvent is None:
-    raise ValueError('Can not shock solvent sometimes if no solvent ' +
-        'is specified. Add "solvent: True" to the solvent in olf/odors')
+    raise ValueError('Can not shock solvent sometimes if no solvent '
+        'is specified. Add "solvent: True" to the solvent in olf/odors'
+    )
 
 if len(all_pins) > len(set(all_pins)):
-    raise ValueError('Some pins specified as controlling more than one thing.' +
-        ' This is unsupported. Fix parameters.')
+    raise ValueError('Some pins specified as controlling more than one thing.'
+        ' This is unsupported. Fix parameters.'
+    )
 
 ###############################################################################
 # Parameters unique to experiments with NO reinforcement
@@ -436,7 +317,7 @@ required_testonly_params = {
     'olf/inter_test_interval_s'
 }
 
-have_testonly_params = get_params(params, required_testonly_params, dict())
+have_testonly_params = u.get_params(params, required_testonly_params, dict())
 
 if have_testonly_params:
     testing_blocks = params['olf/testing_blocks']
@@ -446,7 +327,8 @@ if ((have_testonly_params and have_training_params) or
     not (have_testonly_params or have_training_params)):
 
     raise ValueError(
-        'must set either test-only or training parameters, and not both.')
+        'must set either test-only or training parameters, and not both.'
+    )
 
 ###############################################################################
 
@@ -461,7 +343,6 @@ if not random_valve_connections:
     right_pins = [x['right_pin'] for x in odors_and_pins]
     # TODO TODO rename to indicate the order is important, or use a
     # different datatype
-
 else:
     # ../ so it goes in directory that contains experiment group directories
     # (e.g. ~/data, rather than ~/data/<experiment_group_name>), so that it
@@ -477,7 +358,8 @@ else:
 
             rospy.loginfo('Cached odor->valve map has expired ' +
                 '(age: {} hrs, lifetime: {})'.format(map_age_hrs,
-                params['olf/valve_odor_connections_expiration_hr']))
+                params['olf/valve_odor_connections_expiration_hr']
+            ))
             rospy.logwarn('Deleting ' + abs_valve_conns_filename)
             generate_odor_to_pin_connections = True
 
@@ -510,22 +392,24 @@ else:
             if not saved_conns_valid:
                 success = True
                 rospy.logwarn('Cached odor->valve map had pins or odors ' +
-                    'not in current stimulus_parameters.yaml')
+                    'not in current stimulus_parameters.yaml'
+                )
                 rospy.logwarn('Deleting ' + abs_valve_conns_filename)
                 os.remove(valve_conns_filename)
                 generate_odor_to_pin_connections = True
 
             while not success:
                 if params['olf/prompt_to_regen_connections']:
-                    c = ros_friendly_raw_input(
-                        'Found saved valve->odor mapping. Use? [y/n]\n')
+                    c = u.ros_friendly_raw_input(
+                        'Found saved valve->odor mapping. Use? [y/n]\n'
+                    )
                 else:
                     c = 'y'
 
                 if c.lower() == 'y':
                     rospy.loginfo('Using odors and odor->pin mappings from ' +
-                        abs_valve_conns_filename)
-
+                        abs_valve_conns_filename
+                    )
                     odors = saved_odors
                     left_pins = saved_left_pins
                     right_pins = saved_right_pins
@@ -542,7 +426,6 @@ else:
                     continue
 
                 success = True
-
     else:
         generate_odor_to_pin_connections = True
 
@@ -562,9 +445,10 @@ else:
         # during a successful exit?
 
         with open(valve_conns_filename, 'wb') as f:
-            rospy.loginfo('temporarily saving odors and odor->pin mappings ' +
+            rospy.loginfo('temporarily saving odors and odor->pin mappings '
                 'to ' + abs_valve_conns_filename +
-                ', for reuse in other experiments today.')
+                ', for reuse in other experiments today.'
+            )
             pickle.dump([odors, left_pins, right_pins], f)
             # TODO verify it saved correctly?
 
@@ -624,14 +508,15 @@ if len(odors) == 1:
         # TODO TODO TODO allow some configuration to allow one odor specified in
         # odor list to be presented on both sides, for no-learning, zero discrim
         # control. how best?
-        rospy.logwarn('Only one odor. When presented on one side, two valves' +
-            ' will click, but on the opposite side, no valves will. Asymmetry.')
-
+        rospy.logwarn('Only one odor. When presented on one side, two valves'
+            ' will click, but on the opposite side, no valves will. Asymmetry.'
+        )
 else:
     for odor in odors_and_pins:
         if 'against_itself' in odor:
             raise NotImplementedError(
-                "currently only support 'against_itself' option for one odor")
+                "currently only support 'against_itself' option for one odor"
+            )
 
     # TODO rename reinforced/unreinforced (because sometimes we don't have any
     # training trials)
@@ -650,9 +535,11 @@ else:
     unreinforced = random.choice(unreinforced_odor_candidates)
 
 # TODO delete me
+'''
 print('unreinforced', unreinforced)
 print('reinforced', reinforced)
-sys.exit()
+import sys; sys.exit()
+'''
 #
 
 if have_training_params:
@@ -662,13 +549,18 @@ if have_training_params:
 	    rospy.loginfo('pairing shock with '  + str(reinforced))
 	    rospy.loginfo('unpaired ' + str(unreinforced))
 
+# Must be True to ensure that the stimulus program doesn't start until after the
+# tracking is already up and running, as there is currently no other mechanism
+# implemented to sequence them (The ROS launch file starts both at the same
+# time. The tracking can take a few seconds to get going, and the user may
+# need to manually enter / confirm ROIs.).
 # TODO include this in optional parameter dict above?
 # TODO TODO also only start recording when this is done? (when using this with
 # multi_tracker) (maybe preferably, just make sure tracking is started before
 # starting stimuli)
 wait_for_keypress = rospy.get_param('olf/wait_for_keypress', False)
 if wait_for_keypress:
-    ros_friendly_raw_input('Press Enter to start stimulus program.\n')
+    u.ros_friendly_raw_input('Press Enter to start stimulus program.\n')
 
 
 # TODO TODO TODO make sure randomness isn't broken here, and that the mappings
@@ -709,11 +601,9 @@ class StimuliGenerator:
             elif initial_side == 'right':
                 self.current_side_is_left = False
 
+
     # currently just on all the time. maybe i want something else?
     def odor_transitions(self, train=False, solvent_only=False):
-        """
-        TODO
-        """
         odor_pulse = State(ms_on=odor_pulse_ms, ms_off=post_pulse_ms)
         # don't need explicit low transition because default state is low
         # but end time in Sequence message must be set correctly
@@ -786,16 +676,14 @@ class StimuliGenerator:
 
 
     def shock_transitions(self):
-        """
-        TODO
-        """
         # TODO TODO TODO verify this use of Transition.t leads to expected
         # behavior
         # TODO handle as other params (make var)
         onset_delay_ms = params['zap/delay_from_odor_onset_ms']
         square_wave = State(ms_on=shock_ms_on, ms_off=shock_ms_off)
         transition = Transition(self.current_t0 + 
-            rospy.Duration(onset_delay_ms / 1000.0), square_wave)
+            rospy.Duration(onset_delay_ms / 1000.0), square_wave
+        )
 
         pins = []
         pin_transitions = []
@@ -835,9 +723,9 @@ class StimuliGenerator:
 
         else:
             if one_pin_shock:
-                raise ValueError('must specify zap/left_shock and ' +
-                    'zap/right_shock, if train_one_odor_at_a_time is False')
-
+                raise ValueError('must specify zap/left_shock and '
+                    'zap/right_shock, if train_one_odor_at_a_time is False'
+                )
             if self.current_side_is_left:
                 pins.append(left_shock)
                 pin_transitions.append(transition)
@@ -903,11 +791,8 @@ class StimuliGenerator:
     def delay(self, delay_s):
         ros_delay = rospy.Duration(delay_s)
         self.current_t0 = self.current_t0 + ros_delay
-        # do we have a copy constructor?
-        return rospy.Time.from_sec(self.current_t0.to_sec())
+        return u.copy_rostime(self.current_t0)
 
-
-flatten = lambda l: [item for sublist in l for item in sublist]
 
 gen = StimuliGenerator()
 
@@ -930,8 +815,8 @@ if have_training_params:
     trial_structure += ([] if (pretest_to_train_s is None) else
                         [gen.test(),
                          gen.delay(pretest_to_train_s)]) + \
-                       ((flatten([[f(), gen.delay(inter_train_interval_s)] for f
-                         in [gen.train] * (training_blocks - 1)]) + \
+                       ((u.flatten([[f(), gen.delay(inter_train_interval_s)]
+                         for f in [gen.train] * (training_blocks - 1)]) + \
                         [gen.train()]) if training_blocks > 0 else []) + \
                        [gen.delay(train_to_posttest_s),
                         gen.test()]
@@ -944,8 +829,8 @@ elif have_testonly_params:
     # TODO looks like case where testing_blocks == 1 might have extra long
     # posttest period (=beyond_post_test_s + inter_test_interval_s). fix if so
     # TODO should i really support testing_blocks == 0 case?
-    trial_structure += ((flatten([[f(), gen.delay(inter_test_interval_s)] for f
-                         in [gen.test] * (testing_blocks - 1)]) +
+    trial_structure += ((u.flatten([[f(), gen.delay(inter_test_interval_s)]
+                         for f in [gen.test] * (testing_blocks - 1)]) +
                          [gen.test()]) if testing_blocks > 0 else [])
     epoch_labels += ['test']  * testing_blocks
 
@@ -994,62 +879,32 @@ default_states = [DefaultState(p, True) for p in set(high_pins)] + \
 # So this won't publish to /rosout unless this is called from a node that has
 # been "set up properly" with init_node. Is that required for it to be displayed
 # on the screen? Or saved in log files elsewhere?
-rospy.loginfo('Stimuli should finish at ' +
-    datetime.datetime.fromtimestamp(gen.current_t0.to_sec()).strftime(
-    '%Y-%m-%d %H:%M:%S'))
+rospy.loginfo('Stimuli should finish at ' + u.readable_rostime(gen.current_t0))
 rospy.loginfo(str(gen.current_t0.to_sec() - t0_sec) + ' seconds')
+# TODO delete me
+#'''
+print('default_states:')
+for x in default_states:
+    print('type(x):', type(x))
+    print('x:\n', x)
+print()
+print('trial_structure:')
+for x in trial_structure:
+    print('type(x):', type(x))
+    print('x:\n', x)
+print()
+#'''
+print('\ntypes of trial_structure elements:')
+print([str(type(x)) for x in trial_structure])
+print('len(trial_structure):', len(trial_structure))
+print('# non-Time objects in trial_structure:',
+    sum([type(x) is not rospy.Time for x in trial_structure])
+)
+print()
+#
 
 output_base_dir = '.'
 
-def represent_default_states(defaults):
-    """Returns a representation of a list of stimuli/DefaultState for neat YAML.
-    """
-    high_by_default = dict()
-    for default in defaults:
-        high_by_default[default.pin] = default.high
-    return high_by_default
-
-def represent_rostime(t):
-    """Returns a float of the same Unix epoch time as the input ROS Time.
-    """
-    return t.to_sec()
-
-def represent_state(s):
-    """Return a representation of stimuli/State type for neat YAML saving.
-    """
-    return {'ms_on': s.ms_on, 'ms_off': s.ms_off}
-
-def represent_transition(t):
-    """Return a representation of stimuli/Transition type for neat YAML saving.
-    """
-    return {'time': represent_rostime(t.t), 'new_state': represent_state(t.s)}
-
-def represent_sequence(seq):
-    """Return a representation of stimuli/Sequence type for neat YAML saving.
-    """
-    return {'start': represent_rostime(seq.start),
-            'end': represent_rostime(seq.end),
-            'pins': seq.pins,
-            'transitions': [represent_transition(t) for t in seq.seq]}
-
-def represent_trial_structure(ts):
-    """
-    """
-    ts_representation = []
-    for b in ts:
-        if type(b) is rospy.rostime.Time:
-            ts_representation.append(represent_rostime(b))
-
-        # TODO can i do without the _LoadSequence part? need a diff import?
-        #elif type(b) is stimuli.srv._LoadSequence.LoadSequenceRequest:
-        elif type(b) is LoadSequenceRequest:
-            ts_representation.append(represent_sequence(b.seq))
-
-        else:
-            raise ValueError('unexpected type in trial structure: ' +
-                '{}'.format(type(b)))
-
-    return ts_representation
 
 # TODO test this
 if save_stimulus_info:
@@ -1064,7 +919,8 @@ if save_stimulus_info:
         experiment_basename = \
             time.strftime('%Y%m%d_%H%M%S_N1', time.localtime())
         rospy.set_param('multi_tracker/experiment_basename',
-            experiment_basename)
+            experiment_basename
+        )
 
     output_dir = os.path.join(output_base_dir, experiment_basename)
     filename = os.path.join(output_dir, experiment_basename + '_stimuli.p')
@@ -1078,7 +934,8 @@ if save_stimulus_info:
     with open(filename, 'wb') as f:
         # TODO maybe also save this as a dict?
         pickle.dump((odors2left_pins, odors2right_pins, default_states,
-            trial_structure), f)
+            trial_structure), f
+        )
 
     # TODO allow testing this w/o running experiment
     if save_yaml_stiminfo:
@@ -1096,21 +953,21 @@ if save_stimulus_info:
 
         stiminfo['left_pins2odors'] = left_pins2odors
         stiminfo['right_pins2odors'] = right_pins2odors
-        
-        stiminfo['high_by_default'] = represent_default_states(default_states)
-
-        stiminfo['trial_structure'] = represent_trial_structure(trial_structure)
+        stiminfo['high_by_default'] = u.represent_default_states(default_states)
+        stiminfo['trial_structure'] = u.represent_trial_structure(
+            trial_structure
+        )
 
         yaml_stimfile = os.path.join(output_dir,
-            experiment_basename + '_stimuli.yaml')
+            experiment_basename + '_stimuli.yaml'
+        )
         with open(yaml_stimfile, 'w') as f:
             yaml.dump(stiminfo, f)
-
 else:
-    rospy.logwarn('Not saving generated trial structure ' +
-        '/ pin to odor mappings!')
+    rospy.logwarn('Not saving generated trial structure '
+        '/ pin to odor mappings!'
+    )
 
 # TODO option to play this quickly for testing purposes
-stimuli_loader = StimuliLoader(default_states, trial_structure,
-    epoch_labels=epoch_labels)
+StimuliLoader(default_states, trial_structure, epoch_labels=epoch_labels)
 
