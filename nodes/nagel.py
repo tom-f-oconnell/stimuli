@@ -6,9 +6,11 @@ from __future__ import print_function
 import time
 import os
 import math
+import pickle
 
 import rospy
 from std_msgs.msg import Header
+import yaml
 
 from stimuli.msg import Sequence, Transition, State, DefaultState
 from stimuli.srv import LoadSequenceRequest
@@ -218,32 +220,32 @@ if experiment_basename is None:
         experiment_basename
     )
 
-# TODO TODO TODO 
-"""
 output_base_dir = '.'
 output_dir = os.path.join(output_base_dir, experiment_basename)
-rospy.loginfo('Trying to save save stimulus info to ' + filename)
 
 if not os.path.isdir(output_dir):
     os.mkdir(output_dir)
 
-'''
-if save_yaml_stiminfo:
-    # make sure i don't mutate these, since the same variables are passed to
-    # stimuli loader
-    stiminfo = dict()
-    stiminfo['high_by_default'] = u.represent_default_states(default_states)
-    stiminfo['trial_structure'] = u.represent_trial_structure(
-        trial_structure
-    )
+pickle_fname = os.path.join(output_dir, experiment_basename + '_stimuli.p')
+with open(pickle_fname, 'wb') as f:
+    pickle.dump((default_states, trial_structure), f)
 
-    yaml_stimfile = os.path.join(output_dir,
-        experiment_basename + '_stimuli.yaml'
-    )
-    with open(yaml_stimfile, 'w') as f:
-        yaml.dump(stiminfo, f)
-'''
-"""
+# make sure i don't mutate these, since the same variables are passed to
+# stimuli loader
+stiminfo = dict()
+stiminfo['defaults'] = u.represent_default_states(default_states)
+stiminfo['trial_structure'] = u.represent_trial_structure(
+    trial_structure
+)
+
+yaml_stimfile = os.path.join(output_dir,
+    experiment_basename + '_stimuli.yaml'
+)
+rospy.loginfo('Trying to save save stimulus info to ' + yaml_stimfile)
+
+with open(yaml_stimfile, 'w') as f:
+    yaml.dump(stiminfo, f)
+
 ###############################################################################
 
 # TODO maybe *do* use the epoch_labels kwarg if randomly interleaving "blank"
