@@ -10,7 +10,6 @@ import pickle
 
 import rospy
 from std_msgs.msg import Header
-import yaml
 
 from stimuli.msg import Sequence, Transition, State, DefaultState
 from stimuli.srv import LoadSequenceRequest
@@ -229,22 +228,6 @@ if not os.path.isdir(output_dir):
 pickle_fname = os.path.join(output_dir, experiment_basename + '_stimuli.p')
 with open(pickle_fname, 'wb') as f:
     pickle.dump((default_states, trial_structure), f)
-
-# make sure i don't mutate these, since the same variables are passed to
-# stimuli loader
-stiminfo = dict()
-stiminfo['defaults'] = u.represent_default_states(default_states)
-stiminfo['trial_structure'] = u.represent_trial_structure(
-    trial_structure
-)
-
-yaml_stimfile = os.path.join(output_dir,
-    experiment_basename + '_stimuli.yaml'
-)
-rospy.loginfo('Trying to save save stimulus info to ' + yaml_stimfile)
-
-with open(yaml_stimfile, 'w') as f:
-    yaml.dump(stiminfo, f)
 
 ###############################################################################
 
