@@ -47,8 +47,15 @@ required_params = {
     'olf/intertrial_delay_s',
 }
 
+optional_params = {
+    'olf/phasic_odor_high_ms': None,
+    # TODO test this default value gets passed through correctly
+    'olf/phasic_odor_low_ms': 0
+}
+
+
 params = dict()
-u.get_params(params, required_params)
+u.get_params(params, required_params, optional_params)
 
 # TODO assert these are non-overlapping and of equal length
 odor_pins = params['olf/odor_pins']
@@ -59,6 +66,10 @@ prestimulus_delay_s = params['olf/prestimulus_delay_s']
 pre_pulse_ms = params['olf/pre_pulse_ms']
 odor_pulse_ms = params['olf/odor_pulse_ms']
 post_pulse_ms = params['olf/post_pulse_ms']
+
+# TODO test both None (default) and passed
+high_ms = params['olf/phasic_odor_high_ms']
+low_ms = params['olf/phasic_odor_low_ms']
 
 poststimulus_delay_s = params['olf/poststimulus_delay_s']
 
@@ -135,14 +146,6 @@ n_trials = int(math.ceil(duration_s / (trial_duration_s + intertrial_delay_s)))
 #    poststimulus_delay_s
 #)
 
-# TODO check that `not_pwm` path in firmware still works (and with one of these
-# 1 and the other 0)
-# (it seems to still be there, but actually it just calls `set_non_pwm_pins`
-# once at start of `update_pulses_blocking`, so probably not gonna work great
-# for this...)
-#high = State(ms_on=1, ms_off=0)
-#low = State(ms_on=0, ms_off=1)
-
 if lump_pre_pulse_into_delays:
     intertrial_delay = rospy.Duration(post_pulse_s + intertrial_delay_s +
         pre_pulse_s
@@ -168,11 +171,12 @@ for i in range(n_trials):
         # (stagger a few pins and listen?)
         t_start = start + rospy.Duration(pre_pulse_s)
 
-    # TODO TODO TODO put back to this if ms_off=0 doesn't work
-    # (along w/ change so that intertrial_delay includes post_pulse_ms)
-    # TODO TODO TODO or maybe try ms_off=1 or something first though...
-    #odor_pulse = State(ms_on=odor_pulse_ms, ms_off=post_pulse_ms)
-    odor_pulse = State(ms_on=odor_pulse_ms, ms_off=0)
+    # TODO test both cases
+    if high_ms is None:
+        odor_pulse = State(ms_on=odor_pulse_ms, ms_off=low_ms)
+    else:
+        odor_pulse = State(ms_on=high_ms, ms_off=low_ms)
+
     transitions = [Transition(t_start, odor_pulse)] * len(odor_pins)
 
     # In both cases post_pulse_s is now in one of the delays, to try to make it
