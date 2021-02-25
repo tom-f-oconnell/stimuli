@@ -59,7 +59,6 @@ prestimulus_delay_s = params['olf/prestimulus_delay_s']
 pre_pulse_ms = params['olf/pre_pulse_ms']
 odor_pulse_ms = params['olf/odor_pulse_ms']
 post_pulse_ms = params['olf/post_pulse_ms']
-trial_duration_s = (pre_pulse_ms + odor_pulse_ms + post_pulse_ms) / 1000
 
 poststimulus_delay_s = params['olf/poststimulus_delay_s']
 
@@ -113,12 +112,14 @@ default_states = [DefaultState(p, False) for p in set(low_pins)]
 t0 = rospy.Time.now()
 t_curr = u.copy_rostime(t0)
 
+trial_duration_s = (pre_pulse_ms + odor_pulse_ms + post_pulse_ms) / 1000.0
 pre_pulse_s = pre_pulse_ms / 1000.0
+odor_pulse_s = odor_pulse_ms / 1000.0
+post_pulse_s = post_pulse_ms / 1000.0
+
 # True = hack
 lump_pre_pulse_into_delays = True
-#lump_pre_pulse_into_delays = False
 if lump_pre_pulse_into_delays:
-    pulse_and_post_duration_s = (odor_pulse_ms + post_pulse_ms) / 1000
     t_curr += rospy.Duration(prestimulus_delay_s + pre_pulse_s)
 else:
     t_curr += rospy.Duration(prestimulus_delay_s)
@@ -143,11 +144,13 @@ n_trials = int(math.ceil(duration_s / (trial_duration_s + intertrial_delay_s)))
 #low = State(ms_on=0, ms_off=1)
 
 if lump_pre_pulse_into_delays:
-    intertrial_delay = rospy.Duration(intertrial_delay_s + pre_pulse_s)
+    intertrial_delay = rospy.Duration(post_pulse_s + intertrial_delay_s +
+        pre_pulse_s
+    )
 else:
-    intertrial_delay = rospy.Duration(intertrial_delay_s)
+    intertrial_delay = rospy.Duration(post_pulse_s + intertrial_delay_s)
 
-# TODO TODO TODO fix hack / at least make conditional on invert bool flag
+# TODO TODO fix hack / at least make conditional on invert bool flag
 odor_pins = odor_pins + balance_pins
 
 for i in range(n_trials):
@@ -165,14 +168,20 @@ for i in range(n_trials):
         # (stagger a few pins and listen?)
         t_start = start + rospy.Duration(pre_pulse_s)
 
-    # TODO test that pulses this long actually work (~50s off)
-    odor_pulse = State(ms_on=odor_pulse_ms, ms_off=post_pulse_ms)
+    # TODO TODO TODO put back to this if ms_off=0 doesn't work
+    # (along w/ change so that intertrial_delay includes post_pulse_ms)
+    # TODO TODO TODO or maybe try ms_off=1 or something first though...
+    #odor_pulse = State(ms_on=odor_pulse_ms, ms_off=post_pulse_ms)
+    odor_pulse = State(ms_on=odor_pulse_ms, ms_off=0)
     transitions = [Transition(t_start, odor_pulse)] * len(odor_pins)
 
+    # In both cases post_pulse_s is now in one of the delays, to try to make it
+    # easier to optionally have the odor pulses pulsed, using ms_on+ms_off <
+    # total odor presentation length per trial.
     if lump_pre_pulse_into_delays:
-        t_curr += rospy.Duration(pulse_and_post_duration_s)
+        t_curr += rospy.Duration(odor_pulse_s)
     else:
-        t_curr += rospy.Duration(trial_duration_s)
+        t_curr += rospy.Duration(pre_pulse_s + odor_pulse_s)
 
     end = u.copy_rostime(t_curr)
     # 'transitions' = seq.seq
@@ -191,7 +200,11 @@ for i in range(n_trials):
 # TODO check whether i had this >0 in any of my / kristina's experiments
 # (i did in mine, but maybe just to check behavior... check if i ever had it 0 /
 # if there are problems w/ it being 0)
-t_curr += rospy.Duration(poststimulus_delay_s)
+# Adding post_pulse_s now since I moved this from the ms_off in the loop above
+# to the rospy.Duration object created at the end of each iteration above (via 
+# change to intertrial_delay, so it also includes post_pulse_s), but I believe
+# the loop exits before the last one would be appended.
+t_curr += rospy.Duration(post_pulse_s + poststimulus_delay_s)
 trial_structure += [u.copy_rostime(t_curr)]
 
 # So this won't publish to /rosout unless this is called from a node that has
