@@ -31,18 +31,27 @@ class ValveTester:
         # (so that debug flag can be in effect during services)
         rospy.sleep(5.0)
 
-        rospy.loginfo('valve_tester sending default states')
-        left_pins = rospy.get_param('olf/left_pins', [])
-        right_pins = rospy.get_param('olf/right_pins', [])
+        left_pins_param = 'olf/left_pins'
+        if rospy.has_param(left_pins_param):
+            left_pins = rospy.get_param(left_pins_param, [])
+            right_pins = rospy.get_param('olf/right_pins', [])
 
-        if rospy.get_param('olf/separate_balances', True):
-            lb = rospy.get_param('olf/left_balance')
-            rb = rospy.get_param('olf/right_balance')
-            left_pins.append(lb)
-            right_pins.append(rb)
-            # TODO also check param that controls balance direction?
+            if rospy.get_param('olf/separate_balances', True):
+                lb = rospy.get_param('olf/left_balance')
+                rb = rospy.get_param('olf/right_balance')
+                left_pins.append(lb)
+                right_pins.append(rb)
+                # TODO also check param that controls balance direction?
 
-        pins_to_test = sorted(left_pins + right_pins)
+            pins_to_test = sorted(left_pins + right_pins)
+
+        else:
+            # Assuming we either have these or the parameters above
+            odor_pins = rospy.get_param('olf/odor_pins')
+            balance_pins = rospy.get_param('olf/balance_pins', [])
+
+            pins_to_test = sorted(odor_pins + balance_pins)
+
         if len(pins_to_test) == 0:
             raise ValueError('need some pins to test. specify olf/right_pins '
                 'and olf/left_pins as ROS parameters that are lists of '
@@ -55,10 +64,13 @@ class ValveTester:
         try:
             h = Header()
             h.stamp = rospy.Time.now()
+            rospy.loginfo('valve_tester sending default states')
             resp = load_defaults(h, default_states)
 
         except rospy.ServiceException as exc:
             rospy.logerr('Service load_defaults failed: ' + str(exc))
+            return
+
         rospy.loginfo('valve_tester finished sending default states')
         
         block_num = 0
@@ -84,6 +96,7 @@ class ValveTester:
                     rospy.logerr('Service load_next_sequence failed: ' +
                         str(exc)
                     )
+                    return
 
                 # TODO does it always sleep the period, or try to maintain
                 # period across all calls?
